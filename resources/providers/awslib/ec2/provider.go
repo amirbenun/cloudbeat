@@ -231,3 +231,24 @@ func (p *Provider) DescribeSnapshots(ctx context.Context, snapshot EBSSnapshot) 
 	}
 	return result, nil
 }
+
+func (p *Provider) DescribeSnapshot(ctx context.Context, snapshot EBSSnapshot) (*EBSSnapshot, error) {
+	client := p.clients[snapshot.Region]
+	if client == nil {
+		return nil, fmt.Errorf("error in DescribeSnapshots no client for region %s", snapshot.Region)
+	}
+	input := &ec2.DescribeSnapshotsInput{
+		SnapshotIds: []string{snapshot.SnapshotId},
+	}
+	res, err := client.DescribeSnapshots(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res.Snapshots) != 1 {
+		return nil, fmt.Errorf("error in DescribeSnapshots expected 1 snapshot got %d", len(res.Snapshots))
+	}
+
+	result := FromSnapshot(res.Snapshots[0], snapshot.Region, p.awsAccountID)
+	return &result, nil
+}
