@@ -1,0 +1,166 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for cloudbeat - manages Go modules, GitHub Actions, and Docker images",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases"
+  ],
+  "labels": ["backport-skip", "dependency"],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**"
+  ],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 2,
+  "schedule": ["before 10am on monday"],
+  "timezone": "UTC",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "priority"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Go module dependencies - grouped by provider, weekly updates",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "go dependencies",
+      "schedule": ["before 10am on monday"],
+      "labels": ["backport-skip", "dependency", "go"],
+      "prPriority": 0,
+      "stabilityDays": 3,
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "description": "Major Go updates - create separate PRs",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["backport-skip", "dependency", "go", "major-update"],
+      "prPriority": -1,
+      "schedule": ["before 10am on monday"]
+    },
+    {
+      "description": "Azure SDK dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github\\.com/Azure/"],
+      "groupName": "azure dependencies",
+      "labels": ["backport-skip", "dependency", "go", "azure"]
+    },
+    {
+      "description": "AWS SDK dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github\\.com/aws/"],
+      "groupName": "aws dependencies",
+      "labels": ["backport-skip", "dependency", "go", "aws"]
+    },
+    {
+      "description": "Google Cloud dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^cloud\\.google\\.com/", "^google\\.golang\\.org/api"],
+      "groupName": "google dependencies",
+      "labels": ["backport-skip", "dependency", "go", "google"]
+    },
+    {
+      "description": "Elastic dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github\\.com/elastic/"],
+      "groupName": "elastic dependencies",
+      "labels": ["backport-skip", "dependency", "go", "elastic"]
+    },
+    {
+      "description": "Kubernetes dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^k8s\\.io/"],
+      "groupName": "k8s dependencies",
+      "labels": ["backport-skip", "dependency", "go", "k8s"]
+    },
+    {
+      "description": "Trivy/Aquasecurity dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github\\.com/aquasecurity/"],
+      "groupName": "trivy dependencies",
+      "labels": ["backport-skip", "dependency", "go", "trivy"]
+    },
+    {
+      "description": "Ignore elastic/beats/v7 - requires manual update",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/elastic/beats/v7"],
+      "enabled": false
+    },
+    {
+      "description": "GitHub Actions - weekly updates with automerge for digests",
+      "matchManagers": ["github-actions"],
+      "schedule": ["before 10am on monday"],
+      "labels": ["backport-skip", "dependency", "github_actions"],
+      "pinDigests": true,
+      "semanticCommitType": "ci",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "description": "Automerge GitHub Actions digest updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Docker base images - pin with digests for security",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "labels": ["backport-skip", "dependency", "docker"],
+      "pinDigests": true,
+      "schedule": ["before 10am on monday"],
+      "semanticCommitType": "build",
+      "semanticCommitScope": "docker"
+    },
+    {
+      "description": "Automerge Docker digest updates",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Security vulnerabilities - immediate updates",
+      "matchDatasources": ["go", "docker", "github-tags"],
+      "vulnerabilitySeverity": "high,critical",
+      "labels": ["security", "priority", "backport-skip"],
+      "schedule": ["at any time"],
+      "prPriority": 10,
+      "automerge": false
+    },
+    {
+      "description": "Automerge Go patch updates after 3 days stability",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "stabilityDays": 3,
+      "minimumReleaseAge": "3 days"
+    }
+  ],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Go version in go.mod and workflows",
+      "fileMatch": ["^go\\.mod$", "^\\.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": [
+        "go\\s+(?<currentValue>\\d+\\.\\d+)",
+        "go-version:\\s*['\"]?(?<currentValue>\\d+\\.\\d+)['\"]?"
+      ],
+      "datasourceTemplate": "golang-version",
+      "depNameTemplate": "golang"
+    }
+  ],
+  "golang": {
+    "postUpdateOptions": ["gomodTidy"]
+  }
+}
