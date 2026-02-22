@@ -2,17 +2,19 @@
 CIS AWS IAM management rules verification.
 This module verifies correctness of retrieved findings by manipulating audit actions
 """
+
 from datetime import datetime, timedelta
 from functools import partial
+
 import pytest
 from commonlib.utils import get_ES_evaluation, res_identifier
-
 from product.tests.data.aws import aws_iam_test_cases as aws_iam_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.parameters import Parameters, register_params
+
 from .data.constants import RES_NAME
 
 
-@pytest.mark.aws_iam_rules
+@pytest.mark.cspm_aws_iam_rules
 def test_aws_iam_management_rules(
     cspm_client,
     cloudbeat_agent,
@@ -49,7 +51,7 @@ register_params(
     test_aws_iam_management_rules,
     Parameters(
         ("rule_tag", "case_identifier", "expected"),
-        [*aws_iam_tc.cis_aws_iam_cases.values()],
-        ids=[*aws_iam_tc.cis_aws_iam_cases.keys()],
+        [*aws_iam_tc.test_cases.values()],
+        ids=[*aws_iam_tc.test_cases.keys()],
     ),
 )

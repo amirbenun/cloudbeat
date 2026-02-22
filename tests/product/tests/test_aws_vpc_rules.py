@@ -2,16 +2,19 @@
 CIS AWS Virtual Private Cloud rules verification.
 This module verifies correctness of retrieved findings by manipulating audit actions
 """
+
 from datetime import datetime, timedelta
 from functools import partial
+
 import pytest
 from commonlib.utils import get_ES_evaluation, res_identifier
 from product.tests.data.aws import aws_vpc_test_cases as aws_vpc_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.parameters import Parameters, register_params
+
 from .data.constants import RES_ID
 
 
-@pytest.mark.aws_vpc_rules
+@pytest.mark.cspm_aws_vpc_rules
 def test_aws_vpc_service_rules(
     cspm_client,
     cloudbeat_agent,
@@ -48,7 +51,7 @@ register_params(
     test_aws_vpc_service_rules,
     Parameters(
         ("rule_tag", "case_identifier", "expected"),
-        [*aws_vpc_tc.cis_aws_vpc_cases.values()],
-        ids=[*aws_vpc_tc.cis_aws_vpc_cases.keys()],
+        [*aws_vpc_tc.test_cases.values()],
+        ids=[*aws_vpc_tc.test_cases.keys()],
     ),
 )

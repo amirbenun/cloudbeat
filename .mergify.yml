@@ -1,5 +1,12 @@
+commands_restrictions:
+  backport:
+    conditions:
+      - or:
+        - sender-permission>=write
+        - sender=github-actions[bot]
 queue_rules:
   - name: default
+    merge_method: squash
     conditions:
       - check-success=Cloudbeat-CI / Integration Tests (pull_request)
       - check-success=Cloudbeat-CI / Build (pull_request)
@@ -7,6 +14,14 @@ queue_rules:
       - check-success=Test Rego Policies (pull_request)
       - check-success=Update rules status (pull_request)
       - check-success=Update rules metadata (pull_request)
+defaults:
+  actions:
+    backport:
+      title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+      assignees:
+        - "{{ author }}"
+      labels:
+        - "backport"
 pull_request_rules:
   - name: self-assign PRs
     conditions:
@@ -93,7 +108,6 @@ pull_request_rules:
       - "#approved-reviews-by>=1"
     actions:
       queue:
-        method: squash
         name: default
   - name: delete upstream branch with changes on ^.mergify.yml that has been merged or closed
     conditions:
@@ -131,10 +145,10 @@ pull_request_rules:
           To fixup this pull request, you need to add the backport labels for the needed
           branches, such as:
           * `backport-v./d./d./d` is the label to automatically backport to the `8./d` branch. `/d` is the digit
-          **NOTE**: `backport-skip` has been added to this pull request.
-      label:
-        add:
-          - backport-skip
+          * `backport-active-all` is the label that automatically backports to all active branches.
+          * `backport-active-8` is the label that automatically backports to all active minor branches for the 8 major.
+          * `backport-active-9` is the label that automatically backports to all active minor branches for the 9 major.
+
   - name: remove-backport label
     conditions:
       - label~=backport-v
@@ -271,6 +285,144 @@ pull_request_rules:
           - "{{ author }}"
         branches:
           - "8.12"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.13 branch
+    conditions:
+      - merged
+      - label=backport-v8.13.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.13"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.14 branch
+    conditions:
+      - merged
+      - label=backport-v8.14.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.14"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.15 branch
+    conditions:
+      - merged
+      - label=backport-v8.15.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.15"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.16 branch
+    conditions:
+      - merged
+      - label=backport-v8.16.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.16"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.17 branch
+    conditions:
+      - merged
+      - label=backport-v8.17.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.17"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.18 branch
+    conditions:
+      - merged
+      - label=backport-v8.18.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "8.18"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 8.19 branch
+    conditions:
+      - merged
+      - label=backport-v8.19.0
+    actions:
+      backport:
+        branches:
+          - "8.19"
+  - name: backport patches to 9.0 branch
+    conditions:
+      - merged
+      - label=backport-v9.0.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "9.0"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 9.1 branch
+    conditions:
+      - merged
+      - label=backport-v9.1.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "9.1"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 9.2 branch
+    conditions:
+      - merged
+      - label=backport-v9.2.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "9.2"
+        labels:
+          - "backport"
+        title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"
+  - name: backport patches to 9.3 branch
+    conditions:
+      - merged
+      - label=backport-v9.3.0
+    actions:
+      backport:
+        assignees:
+          - "{{ author }}"
+        branches:
+          - "9.3"
         labels:
           - "backport"
         title: "[{{ destination_branch }}](backport #{{ number }}) {{ title }}"

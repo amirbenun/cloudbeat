@@ -2,17 +2,19 @@
 CIS AWS Monitoring rules verification.
 This module verifies correctness of retrieved findings by manipulating audit actions
 """
+
 from datetime import datetime, timedelta
 from functools import partial
+
 import pytest
 from commonlib.utils import get_ES_evaluation, res_identifier
-
 from product.tests.data.aws import aws_monitoring_test_cases as aws_monitoring_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.parameters import Parameters, register_params
+
 from .data.constants import RES_ID
 
 
-@pytest.mark.aws_monitoring_rules
+@pytest.mark.cspm_aws_monitoring_rules
 def test_aws_monitoring_service_rules(
     cspm_client,
     cloudbeat_agent,
@@ -49,7 +51,7 @@ register_params(
     test_aws_monitoring_service_rules,
     Parameters(
         ("rule_tag", "case_identifier", "expected"),
-        [*aws_monitoring_tc.cis_aws_monitoring_cases.values()],
-        ids=[*aws_monitoring_tc.cis_aws_monitoring_cases.keys()],
+        [*aws_monitoring_tc.test_cases.values()],
+        ids=[*aws_monitoring_tc.test_cases.keys()],
     ),
 )

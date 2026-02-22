@@ -4,10 +4,10 @@ import data.compliance.lib.common
 import data.compliance.policy.gcp.data_adapter
 import future.keywords.if
 
-default is_dnssec_enabled = false
+default is_dnssec_enabled := false
 
 # Ensure That DNSSEC Is Enabled for Cloud DNS.
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_dns_managed_zone
 
@@ -15,10 +15,7 @@ finding = result if {
 	data_adapter.resource.data.visibility == "PUBLIC"
 
 	# set result
-	result := common.generate_result_without_expected(
-		common.calculate_result(is_dnssec_enabled),
-		{"Managed zone": input.resource},
-	)
+	result := common.generate_evaluation_result(common.calculate_result(is_dnssec_enabled))
 }
 
 is_dnssec_enabled if {

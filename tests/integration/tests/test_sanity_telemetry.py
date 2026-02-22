@@ -6,16 +6,17 @@ have been created.
 The goal of this suite is to perform basic sanity checks to verify the telemetry fetchers are working
  as expected.
 """
+
 import pytest
-from commonlib.utils import get_telemetry
-from configuration import elasticsearch
+from fleet_api.common_api import get_telemetry
+from integrations_setup.configuration_fleet import elk_config
 from munch import munchify
 
 
 @pytest.fixture(scope="module", name="cloud_security_telemetry_data")
 def get_cloud_security_telemetry_data():
     """Fixture to fetch telemetry data"""
-    telemetry_payload = get_telemetry(elasticsearch)
+    telemetry_payload = get_telemetry(elk_config)
     telemetry_object = munchify(telemetry_payload[0])
     return telemetry_object.stats.stack_stats.kibana.plugins.cloud_security_posture
 
@@ -33,7 +34,7 @@ def test_telemetry_indices(cloud_security_telemetry_data):
         "findings",
         "latest_findings",
         "vulnerabilities",
-        "latest_vulnerabilities",
+        # "latest_vulnerabilities",  # https://github.com/elastic/security-team/issues/8252
         "score",
     ]
 
@@ -55,9 +56,9 @@ def test_telemetry_cloud_account_stats(cloud_security_telemetry_data):
     for account in cloud_account_stats:
         assert len(account.account_id) > 0, f"Telemetry data missing account_id for cloud_account_stats {account}"
         assert len(account.product) > 0, f"Telemetry data missing product for cloud_account_stats {account}"
-        # assert ( uncomment once bug is solved https://github.com/elastic/security-team/issues/8149
-        #     len(account.package_policy_id) > 0
-        # ), f"Telemetry data missing package_policy_id for cloud_account_stats {account}"
+        assert (
+            len(account.package_policy_id) > 0
+        ), f"Telemetry data missing package_policy_id for cloud_account_stats {account}"
 
         if not (account.product == "kspm" and "CIS Kubernetes" in account.posture_management_stats.benchmark_name):
             assert (

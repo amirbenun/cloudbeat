@@ -5,15 +5,12 @@ import data.compliance.policy.gcp.data_adapter
 import future.keywords.if
 import future.keywords.in
 
-default has_valid_apikey_restrictions = false
+default has_valid_apikey_restrictions := false
 
-finding = result if {
+finding := result if {
 	data_adapter.is_api_key
 
-	result := common.generate_result_without_expected(
-		common.calculate_result(has_valid_apikey_restrictions == true),
-		data_adapter.resource.data,
-	)
+	result := common.generate_evaluation_result(common.calculate_result(has_valid_apikey_restrictions == true))
 }
 
 has_valid_apikey_restrictions if {

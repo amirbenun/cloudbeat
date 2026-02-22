@@ -1,17 +1,19 @@
 """
 Integration tests setup configurations and fixtures
 """
-from pathlib import Path
+
 import time
+from pathlib import Path
+
 import pytest
 from commonlib.io_utils import get_k8s_yaml_objects
 from commonlib.kubernetes import ApiException
 from loguru import logger
 
 DEPLOY_YML_DICT = {
-    "cloudbeat_vanilla": "../../deploy/cloudbeat-pytest.yml",
-    "elastic-agent_vanilla": "../../deploy/sa-agent-pytest.yml",
-    "cloudbeat_eks": "../../deploy/cloudbeat-eks-pytest.yaml",
+    "cloudbeat_vanilla": "../../test_environments/cloudbeat-pytest.yml",
+    "elastic-agent_vanilla": "../../test_environments/sa-agent-pytest.yml",
+    "cloudbeat_eks": "../../test_environments/cloudbeat-eks-pytest.yaml",
 }
 
 

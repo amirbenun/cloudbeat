@@ -1,0 +1,69 @@
+name: 'AWS Asset Inventory CI'
+description: 'AWS Asset Inventory integration tests'
+inputs:
+  elk-version:
+    description: 'ELK version'
+    required: true
+  aws-access-key-id:
+    description: 'AWS access key id'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS secret access key'
+    required: true
+  aws-account-type:
+    description: 'AWS account type'
+    required: false
+    default: single-account
+
+  debug:
+    description: 'debug'
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Init Integration
+      uses: ./.github/actions/init-integration
+      with:
+        elk-version: ${{ inputs.elk-version }}
+
+    - name: Run cloudbeat in background
+      env:
+        ES_HOST: http://localhost:9200
+        ES_USERNAME: elastic
+        ES_PASSWORD: changeme
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_ACCOUNT_TYPE: ${{ inputs.aws-account-type }}
+      shell: bash
+      run: |
+        ./cloudbeat -c deploy/asset-inventory/cloudbeat-aws-asset-inventory.yml -d '*' &
+
+    - name: Wait for cloudbeat to send some events
+      shell: bash
+      run: sleep 20
+
+    - name: Check for assets
+      working-directory: ./tests
+      env:
+        USE_K8S: "false"
+      shell: bash
+      run: poetry run pytest -k "asset_inventory_aws" --alluredir=./allure/results/ --clean-alluredir
+
+    - name: Upload test results
+      if: ${{ always() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: allure-results-ci-aws-asset-inventory
+        path: tests/allure/results/
+        overwrite: true
+
+    - if: ${{ failure() || cancelled() || inputs.debug == 'true' }}
+      name: Upload cloudbeat logs
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: cloubeat-logs-ci-aws-asset-inventory
+        path: logs/
+        if-no-files-found: warn
+        retention-days: 1
+        overwrite: true

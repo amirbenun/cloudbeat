@@ -11,6 +11,19 @@ Parameters:
     Type: CommaDelimitedList
     AllowedPattern: ^(ou-[0-9a-z]{4,32}-[a-z0-9]{8,32}|r-[0-9a-z]{4,32})$
 
+  ScanManagementAccount:
+    Description: |
+      When set to "Yes", the Management Account resources will be scanned,
+      regardless of selected Organizational Unit IDs. Likewise, when set to
+      "No", the Management Account resources will not be scanned, even if
+      the Management Account belongs to a selected Organizational Unit.
+    Type: String
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "Yes"
+    ConstraintDescription: Must specify "Yes" or "No"
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-arm64
@@ -41,6 +54,11 @@ Parameters:
     Description: The version of elastic-agent to install
     Type: String
 
+Conditions:
+  ScanManagementAccountEnabled: !Equals
+    - !Ref ScanManagementAccount
+    - "Yes"
+
 Resources:
 
   # Security Group for EC2 instance
@@ -54,7 +72,7 @@ Resources:
             - 2
             - !Split
               - /
-              - !Ref "AWS::StackId"
+              - !Ref AWS::StackId
       GroupDescription: Block incoming traffic
       SecurityGroupIngress: []
 
@@ -64,6 +82,9 @@ Resources:
     Properties:
       RoleName: cloudbeat-root
       Description: Role that cloudbeat uses to assume roles in other accounts
+      Tags:
+        - Key: cloudbeat_scan_management_account
+          Value: !Ref ScanManagementAccount
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -86,6 +107,14 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - iam:GetRole
+                  - iam:ListAccountAliases
+                  - iam:ListGroups
+                  - iam:ListRoles
+                  - iam:ListUsers
+                Resource: '*'
+              - Effect: Allow
+                Action:
                   - organizations:List*
                   - organizations:Describe*
                 Resource: '*'
@@ -93,8 +122,6 @@ Resources:
                 Action:
                   - sts:AssumeRole
                 Resource: '*'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/SecurityAudit
 
   # Instance profile to attach to EC2 instance
   ElasticAgentInstanceProfile:
@@ -107,10 +134,10 @@ Resources:
             - 2
             - !Split
               - /
-              - !Ref "AWS::StackId"
+              - !Ref AWS::StackId
       Path: /
       Roles:
-        - !Ref "CloudbeatRootRole"
+        - !Ref CloudbeatRootRole
 
   # EC2 Instance to run elastic-agent
   ElasticAgentEc2Instance:
@@ -128,14 +155,14 @@ Resources:
                 - 2
                 - !Split
                   - /
-                  - !Ref "AWS::StackId"
+                  - !Ref AWS::StackId
         - Key: Task
           Value: Organization Cloud Security Posture Management Scanner
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref ElasticAgentInstanceProfile
       SecurityGroupIds:
-        - !Ref ElasticAgentSecurityGroup
+        - !GetAtt ElasticAgentSecurityGroup.GroupId
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -x
@@ -143,21 +170,16 @@ Resources:
             sudo yum install -y aws-cfn-bootstrap || { sudo apt-get update && sudo apt-get -y install python3-pip && sudo pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz; }
             cfn-signal --exit-code "$1" --stack ${AWS::StackName} --resource ElasticAgentEc2Instance --region ${AWS::Region}
           }
-          is_version_valid() {
-            local agent_version="$1"
-            local min_version="$2"
-            [[ "$min_version" = CFT_* ]] && return 0 # if the file is not published do not check
-            printf '%s\n%s\n' "$min_version" "$agent_version" | sort --version-sort --check=quiet
-          }
-          if ! is_version_valid "${ElasticAgentVersion}" 'CFT_VERSION' &> /dev/null; then
-            signal 22
-            exit
+          install_servers_opt=""
+          major_version=$(echo "${ElasticAgentVersion}" | cut -d'.' -f1)
+          if [ "$major_version" -ge 9 ]; then
+              install_servers_opt="--install-servers"
           fi
           ElasticAgentArtifact=elastic-agent-${ElasticAgentVersion}-linux-arm64
           curl -L -O ${ElasticArtifactServer}/$ElasticAgentArtifact.tar.gz
           tar xzvf $ElasticAgentArtifact.tar.gz
           cd $ElasticAgentArtifact
-          sudo ./elastic-agent install --non-interactive --url=${FleetUrl} --enrollment-token=${EnrollmentToken} --tag=cft_version:cloudformation-cspm-organization-account-CFT_VERSION.yml --tag=cft_arn:${AWS::StackId}
+          sudo ./elastic-agent install --non-interactive $install_servers_opt --url=${FleetUrl} --enrollment-token=${EnrollmentToken} --tag=cft_version:cloudformation-cspm-organization-account-CFT_VERSION.yml --tag=cft_arn:${AWS::StackId}
           signal $?
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -207,6 +229,23 @@ Resources:
               Path: /
               ManagedPolicyArns:
                 - arn:aws:iam::aws:policy/SecurityAudit
+
+  CloudbeatManagementAccountAuditRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: cloudbeat-securityaudit
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt CloudbeatRootRole.Arn
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/SecurityAudit
+    Condition: ScanManagementAccountEnabled
 
 Outputs:
   CloudbeatRootRoleArn:

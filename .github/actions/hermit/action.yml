@@ -1,0 +1,112 @@
+name: "Hermit Environment"
+description: "Activate hermit environment"
+inputs:
+  # This action should not be called with `init-tools: 'false` from standalone workflows.
+  # The purpose is for the ci.yml first to init the tools and cache them,
+  # while the rest of the jobs wait for that, and then the rest of the jobs fetch them from cache
+  # by including this action with `init-tools: false`.
+  # If you want to use this action from a standalone workflow, use `init-tools: 'true`,
+  # or use the step that activates the hermit, directly. Otherwise the
+  init-tools:
+    description: "Init tools"
+    required: false
+    default: "false"
+  free-disk:
+    description: "Free disk space"
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - id: free-disk
+      name: Free Disk Space
+      if: ${{ inputs.free-disk == 'true' }}
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
+      with:
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: false
+        docker-images: true
+        swap-storage: true
+
+    - id: hermit-hash
+      shell: bash
+      run: |
+        bin_hashes="$(find ./bin ! -type d | sort | xargs openssl sha256 | openssl sha256 -r | cut -d' ' -f1)"
+        poetry_security_polices="${{ hashFiles('./security-policies/poetry.lock', './security-policies/pyproject.toml') }}"
+        poetry_tests="${{ hashFiles('./tests/poetry.lock', './tests/pyproject.toml') }}"
+        pre_commit="${{ hashFiles('.pre-commit-config.yaml') }}"
+        action_hash="${{ hashFiles('.github/actions/hermit/action.yml') }}"
+        hash="$(echo "${bin_hashes} ${poetry_security_polices} ${poetry_tests} ${pre_commit} ${action_hash}" | sha256sum | cut -d' ' -f1)"
+        echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+    - id: cache-tools
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: |
+          ~/.cache/hermit/pkg
+          ./.hermit
+          ~/.cache/pypoetry
+          ~/.cache/pre-commit
+        key: ci-hermit-env-${{ runner.os }}-${{ steps.hermit-hash.outputs.hash }}
+        restore-keys: |
+          ci-hermit-env-${{ runner.os }}
+
+    - id: cache-go-deps
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: |
+          ~/go/pkg/
+        key: ci-go-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.mod', '**/go.sum') }}
+
+    - name: Initialize hermit
+      shell: bash
+      run: |
+        max_retries=5
+        retry_delay=10
+        ./.ci/scripts/retry.sh "$max_retries" "$retry_delay" './bin/hermit env --raw >> "$GITHUB_ENV"'
+
+    # in case of cache miss, an older instance of cache could be selected (with restore-keys).
+    # Clean hermit packages to avoid continuously size increment of folder ~/.cache/hermit/pkg.
+    - name: Clean hermit packages
+      if: steps.cache-tools.outputs.cache-hit != 'true'
+      shell: bash
+      run: hermit clean --transient
+
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install hermit packages
+      shell: bash
+      run: hermit install
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install poetry
+      shell: bash
+      run: pip3 install poetry
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install poetry-plugin-export
+      shell: bash
+      run: pip3 install poetry-plugin-export
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install tests poetry dependencies
+      shell: bash
+      run: cd ./tests && poetry install
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install security-policies poetry dependencies
+      shell: bash
+      run: cd ./security-policies && poetry install --no-root
+    - if: ${{ inputs.init-tools == 'true' }}
+      name: Install pre-commit repos
+      shell: bash
+      run: pre-commit || true
+    - name: Download go dependencies
+      shell: bash
+      run: go mod download && go mod tidy
+
+    - name: Log cached paths
+      shell: bash
+      run: |
+        ls -lah ~/.cache/hermit/pkg
+        ls -lah ./.hermit
+        ls -lah ~/.cache/pypoetry
+        ls -lah ~/.cache/pre-commit

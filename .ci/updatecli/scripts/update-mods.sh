@@ -13,6 +13,8 @@ function update_deps() {
     return 0
 }
 
+mage buildOpaBundle
+
 go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | # List all direct dependencies
     grep -v 'github.com/elastic/beats/v7' |                           # Updated separately
     sort --random-sort |                                              # Avoid always having the same update order

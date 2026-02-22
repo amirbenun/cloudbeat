@@ -5,14 +5,11 @@ import data.compliance.policy.gcp.data_adapter
 import data.compliance.policy.gcp.sql.ensure_private_ip as audit
 import future.keywords.if
 
-finding = result if {
+finding := result if {
 	data_adapter.is_sql_instance
 	is_clous_sql_instance_second_gen
 
-	result := common.generate_result_without_expected(
-		common.calculate_result(audit.ip_is_private),
-		data_adapter.resource,
-	)
+	result := common.generate_evaluation_result(common.calculate_result(audit.ip_is_private))
 }
 
 is_clous_sql_instance_second_gen if {

@@ -2,9 +2,11 @@ package compliance.policy.azure.data_adapter
 
 import future.keywords.if
 
-resource = input.resource
+resource := input.resource
 
-properties = resource.properties
+properties := resource.properties
+
+identity := resource.identity
 
 is_bastion if {
 	input.subType == "azure-bastion"
@@ -23,9 +25,9 @@ is_vault if {
 	input.subType == "azure-vault"
 }
 
-role_definitions = resource
+role_definitions := resource
 
-bastions = resource
+bastions := resource
 
 is_disk if {
 	input.subType == "azure-disk"
@@ -45,18 +47,26 @@ is_vm if {
 	input.subType = "azure-vm"
 }
 
-private_endpoint_connections = properties.privateEndpointConnections
+private_endpoint_connections := properties.privateEndpointConnections
 
-network_acls = properties.networkAcls
+network_acls := properties.networkAcls
 
-site_config = properties.siteConfig
+site_config := properties.siteConfig
 
-activity_log_alerts = resource
+activity_log_alerts := resource
 
-diagnostic_settings = resource
+diagnostic_settings := resource
 
 is_storage_account if {
 	input.subType == "azure-storage-account"
+}
+
+is_security_contacts if {
+	input.subType == "azure-security-contacts"
+}
+
+is_security_auto_provisioning_settings if {
+	input.subType == "azure-security-auto-provisioning-settings"
 }
 
 is_activity_log_alerts if {
@@ -71,8 +81,24 @@ is_diagnostic_settings if {
 	input.subType == "azure-diagnostic-settings"
 }
 
-is_postgresql_server_db if {
+is_postgresql_single_server_db if {
 	input.subType == "azure-postgresql-server-db"
+}
+
+is_postgresql_flexible_server_db if {
+	input.subType == "azure-flexible-postgresql-server-db"
+}
+
+is_postgresql_server_db if {
+	is_postgresql_single_server_db
+}
+
+is_postgresql_server_db if {
+	is_postgresql_flexible_server_db
+}
+
+is_flexible_mysql_server_db if {
+	input.subType == "azure-flexible-mysql-server-db"
 }
 
 is_mysql_server_db if {
@@ -99,7 +125,7 @@ is_document_db_database_account if {
 	input.subType == "azure-document-db-database-account"
 }
 
-insights_components = resource
+insights_components := resource
 
 is_insights_component if {
 	input.subType == "azure-insights-component"

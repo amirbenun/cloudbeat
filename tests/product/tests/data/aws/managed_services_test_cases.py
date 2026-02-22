@@ -3,11 +3,12 @@ This module provides AWS EKS service rule test cases.
 Cases are organized as rules.
 Each rule has one or more test cases.
 """
-from configuration import eks
-from commonlib.framework.reporting import skip_param_case, SkipReportData
 
-from ..eks_test_case import EksAwsServiceCase
+from commonlib.framework.reporting import SkipReportData, skip_param_case
+from configuration import eks
+
 from ..constants import RULE_FAIL_STATUS, RULE_PASS_STATUS
+from ..eks_test_case import EksAwsServiceCase
 
 config_1_node_1 = eks.config_1_node_1
 
@@ -112,4 +113,4 @@ cis_eks_all = {
     "test-eks-config-2": aws_test_config_2,
 }
 
-cis_eks_aws_cases = cis_eks_all[eks.current_config]
+test_cases = cis_eks_all.get(eks.current_config, {})

@@ -2,12 +2,13 @@
 Kubernetes CIS rules verification.
 This module verifies correctness of retrieved findings by manipulating audit actions
 """
+
 from datetime import datetime, timedelta
+
 import pytest
 from commonlib.utils import get_ES_evaluation
-
 from product.tests.data.aws import managed_services_test_cases as ms_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.parameters import Parameters, register_params
 
 
 @pytest.mark.eks_service_rules
@@ -53,7 +54,7 @@ register_params(
     test_eks_service_rules,
     Parameters(
         ("rule_tag", "case_identifier", "expected"),
-        [*ms_tc.cis_eks_aws_cases.values()],
-        ids=[*ms_tc.cis_eks_aws_cases.keys()],
+        [*ms_tc.test_cases.values()],
+        ids=[*ms_tc.test_cases.keys()],
     ),
 )

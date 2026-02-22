@@ -2,17 +2,19 @@
 CIS AWS logging rules verification.
 This module verifies correctness of retrieved findings by manipulating audit actions
 """
+
 from datetime import datetime, timedelta
 from functools import partial
+
 import pytest
 from commonlib.utils import get_ES_evaluation, res_identifier
-
 from product.tests.data.aws import aws_logging_test_cases as aws_logging_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.parameters import Parameters, register_params
+
 from .data.constants import RES_NAME
 
 
-@pytest.mark.aws_logging_rules
+@pytest.mark.cspm_aws_logging_rules
 def test_aws_logging_rules(
     cspm_client,
     cloudbeat_agent,
@@ -49,7 +51,7 @@ register_params(
     test_aws_logging_rules,
     Parameters(
         ("rule_tag", "case_identifier", "expected"),
-        [*aws_logging_tc.cis_aws_log_cases.values()],
-        ids=[*aws_logging_tc.cis_aws_log_cases.keys()],
+        [*aws_logging_tc.test_cases.values()],
+        ids=[*aws_logging_tc.test_cases.keys()],
     ),
 )

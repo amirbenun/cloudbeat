@@ -1,16 +1,16 @@
 """
 This module provides kubernetes functionality based on original kubernetes python library.
 """
+
+from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Union
-from pathlib import Path
-
-from kubernetes import client, config, utils
-from kubernetes.client import ApiException
-from kubernetes.watch import watch
-from kubernetes.stream import stream
 
 from commonlib.io_utils import get_k8s_yaml_objects
+from kubernetes import client, config, utils
+from kubernetes.client import ApiException
+from kubernetes.stream import stream
+from kubernetes.watch import watch
 from loguru import logger
 
 RESOURCE_POD = "Pod"
@@ -29,7 +29,7 @@ class KubernetesHelper:
         else:
             self.config = config.load_kube_config()
 
-        self.policy_c1_api = client.PolicyV1beta1Api()
+        # self.policy_c1_api = client.PolicyV1beta1Api()
         self.core_v1_client = client.CoreV1Api()
         self.app_api = client.AppsV1Api()
         self.rbac_api = client.RbacAuthorizationV1Api()
@@ -45,7 +45,7 @@ class KubernetesHelper:
             "RoleBinding": self.rbac_api.list_namespaced_role_binding,
             "ClusterRoleBinding": self.rbac_api.list_cluster_role_binding,
             "ClusterRole": self.rbac_api.list_cluster_role,
-            "PodSecurityPolicy": self.policy_c1_api.list_pod_security_policy,
+            # "PodSecurityPolicy": self.policy_c1_api.list_pod_security_policy,
             "Lease": self.coordination_v1_api.list_namespaced_lease,
         }
 
@@ -57,7 +57,7 @@ class KubernetesHelper:
             "Role": self.rbac_api.delete_namespaced_role,
             "RoleBinding": self.rbac_api.delete_namespaced_role_binding,
             "ClusterRoleBinding": self.rbac_api.delete_cluster_role_binding,
-            "PodSecurityPolicy": self.policy_c1_api.delete_pod_security_policy,
+            # "PodSecurityPolicy": self.policy_c1_api.delete_pod_security_policy,
             "ClusterRole": self.rbac_api.delete_cluster_role,
             "Lease": self.coordination_v1_api.delete_namespaced_lease,
         }
@@ -70,7 +70,7 @@ class KubernetesHelper:
             "Role": self.rbac_api.patch_namespaced_role,
             "RoleBinding": self.rbac_api.patch_namespaced_role_binding,
             "ClusterRoleBinding": self.rbac_api.patch_cluster_role_binding,
-            "PodSecurityPolicy": self.policy_c1_api.patch_pod_security_policy,
+            # "PodSecurityPolicy": self.policy_c1_api.patch_pod_security_policy,
             "ClusterRole": self.rbac_api.patch_cluster_role,
             "Lease": self.coordination_v1_api.patch_namespaced_lease,
         }
@@ -83,7 +83,7 @@ class KubernetesHelper:
             "Role": self.rbac_api.create_namespaced_role,
             "RoleBinding": self.rbac_api.create_namespaced_role_binding,
             "ClusterRoleBinding": self.rbac_api.create_cluster_role_binding,
-            "PodSecurityPolicy": self.policy_c1_api.create_pod_security_policy,
+            # "PodSecurityPolicy": self.policy_c1_api.create_pod_security_policy,
             "ClusterRole": self.rbac_api.create_cluster_role,
             "Lease": self.coordination_v1_api.create_namespaced_lease,
         }
@@ -96,7 +96,7 @@ class KubernetesHelper:
             "Role": self.rbac_api.read_namespaced_role,
             "RoleBinding": self.rbac_api.read_namespaced_role_binding,
             "ClusterRoleBinding": self.rbac_api.read_cluster_role_binding,
-            "PodSecurityPolicy": self.policy_c1_api.read_pod_security_policy,
+            # "PodSecurityPolicy": self.policy_c1_api.read_pod_security_policy,
             "ClusterRole": self.rbac_api.read_cluster_role,
             "Lease": self.coordination_v1_api.read_namespaced_lease,
         }
@@ -219,7 +219,7 @@ class KubernetesHelper:
         This function will delete all cloudbeat kubernetes resources.
         Currently, there is no ability to remove through utils due to the following:
         https://github.com/kubernetes-client/python/pull/1392
-        So below is cloud-security-posture own implementation.
+        So below is contextual-security own implementation.
         :return: V1Object - result
         """
         result_list = []
@@ -274,7 +274,7 @@ class KubernetesHelper:
         """
         Delete and recreate the given resource with the given patch.
         """
-        file_path = Path(__file__).parent / "../deploy/mock-pod.yml"
+        file_path = Path(__file__).parent / "../test_environments/mock-pod.yml"
         k8s_resources = get_k8s_yaml_objects(file_path=file_path)
 
         patch_metadata = patch_body["metadata"]

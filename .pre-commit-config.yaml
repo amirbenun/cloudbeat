@@ -2,15 +2,17 @@ exclude: (bin/(activate-)?hermit)|(scripts/make/gimme/.*)
 repos:
   ## General
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: check-yaml
         args: [--allow-multiple-documents, --unsafe]
-        exclude: (^tests/deploy/k8s-cloudbeat-tests/templates/.*)$
+        exclude: (^tests/test_environments/k8s-cloudbeat-tests/templates/.*)$
       - id: check-json
       - id: check-executables-have-shebangs
+      - id: end-of-file-fixer
+        exclude: (cloudbeat.yml|cloudbeat.reference.yml|security-policies/bundle/.*)
       - id: trailing-whitespace
         exclude: (cloudbeat.reference.yml|security-policies/bundle/.*)
 
@@ -18,26 +20,29 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/asottile/add-trailing-comma
-    rev: v3.1.0
+    rev: v3.2.0
     hooks:
       - id: add-trailing-comma
 
-  ## Golang hooks
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.55.2
+  - repo: local
     hooks:
       - id: golangci-lint
+        name: Run golangci-lint
+        entry: bash -c 'golangci-lint run'
+        language: system
+        files: .*.go
+        pass_filenames: false
 
   ## Python
   - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
+    rev: 7.3.0
     hooks:
       - id: flake8
-        name: flake8 ./tests/ ./fleet_api/
-        files: ^(tests|deploy/test-environments/fleet_api)/
+        name: flake8 ./tests/ ./.ci/scripts ./github/actions
+        files: ^(.ci/scripts|.github/actions|tests)/
 
   - repo: https://github.com/pycqa/pylint
-    rev: v3.0.3
+    rev: v3.3.8
     hooks:
       - id: pylint
         args: [
@@ -47,11 +52,17 @@ repos:
         # TODO: Apply pylint in security-policies
         exclude: security-policies.*
 
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        name: isort (python)
+        args: ["--profile", "black"]
+
   - repo: https://github.com/psf/black
-    rev: 23.12.0
+    rev: 25.1.0
     hooks:
       - id: black
-        args: [--line-length=120, --check, --diff]
 
   - repo: local
     hooks:
@@ -63,13 +74,13 @@ repos:
           "fmt",
           "-w",
         ]
-        files: deploy/cloudformation/.*yml
+        files: ^(deploy/cloudformation|deploy/asset-inventory-cloudformation)/.*\.ya?ml$
 
-  - repo: https://github.com/awslabs/cfn-python-lint
-    rev: v0.83.6
+  - repo: https://github.com/aws-cloudformation/cfn-lint
+    rev: v1.39.1
     hooks:
       - id: cfn-python-lint
-        files: deploy/cloudformation/.*.yml
+        files: ^(deploy/cloudformation|deploy/asset-inventory-cloudformation)/.*\.ya?ml$
 
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 3.0.0
@@ -77,8 +88,7 @@ repos:
       - id: shfmt
         args: ["-i", "4"]
       - id: shellcheck
-        files: (deploy/.*sh|scripts/publish_cft.sh|.ci/scripts/.*sh)
-        exclude: deploy/deployment-manager/.*sh
+        exclude: (deploy/deployment-manager/deploy.sh|deploy/deployment-manager/set_env.sh|.buildkite/scripts/publish.sh|scripts/packaging/docker/elastic-agent/build.sh|scripts/common.sh|scripts/make/common.bash)
 
   - repo: local
     hooks:
@@ -96,7 +106,7 @@ repos:
         pass_filenames: false
       - id: go-test
         name: Run short unit tests
-        entry: bash -c 'go test -short -timeout 100ms ./...'
+        entry: bash -c 'go test -failfast -short -timeout 100ms ./...'
         language: system
         files: .*.go
         pass_filenames: false
@@ -105,6 +115,12 @@ repos:
         entry: bash -c 'go mod tidy'
         language: system
         files: (go.mod|go.sum)
+        pass_filenames: false
+      - id: generate-arm-dev-templates
+        name: Generate ARM dev templates
+        entry: bash -c 'deploy/azure/generate_dev_template.py --template-type single-account && deploy/azure/generate_dev_template.py --template-type organization-account'
+        language: python
+        files: deploy/azure/.*
         pass_filenames: false
 
   - repo: local
@@ -139,22 +155,22 @@ repos:
         name: Update rule status
         description: Update rule status in rules_table.md
         require_serial: true
-        entry: poetry run -C security-policies python security-policies/dev/update_rule_status.py
+        entry: poetry run -C security-policies python dev/update_rule_status.py
         pass_filenames: false
         language: system
-        files: (\.rego)$
+        files: (.*\.rego|tests\/product\/.*\.py)$
 
       - id: update-rule-metadata
         name: Update rule metadata
         description: Update rule status in rules_table.md
         require_serial: true
-        entry: poetry run -C security-policies python security-policies/dev/generate_rule_metadata.py
+        entry: poetry run -C security-policies python dev/generate_rule_metadata.py
         pass_filenames: false
         language: system
         files: (\.rego)$
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.38.0
+    rev: v0.45.0
     hooks:
       - id: markdownlint
         args: [ '--disable',
@@ -162,13 +178,30 @@ repos:
                 MD033,  # Allow inline HTML
                 MD046,  # Allow code blocks to be fenced with backticks
                 MD041,  # Allow multiple top level headers
+                MD058,  # Allow tables without blank lines around
                 '--' ]
         # TODO: Apply makrdownlint in other files
         files: security-policies/.*\.(md|markdown)$
 
   - repo: https://github.com/StyraInc/regal
-    rev: v0.14.0
+    rev: v0.36.1
     hooks:
       - id: regal-lint
         args: [security-policies/bundle]
         pass_filenames: false
+
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 42.32.2
+    hooks:
+      - id: renovate-config-validator
+
+  - repo: local
+    hooks:
+      - id: update-assets-md
+        name: Update Asset Inventory's ASSETS.md
+        description: Update implemented resources' status in internal/inventory/ASSETS.md
+        entry: bash
+        args: ['-c', 'cd scripts/update_assets_md && go run main.go']
+        language: system
+        pass_filenames: false
+        files: internal/inventory/asset.go

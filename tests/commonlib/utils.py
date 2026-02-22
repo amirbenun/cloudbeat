@@ -2,12 +2,16 @@
 import datetime
 import json
 import time
-from typing import Union
 from functools import reduce
-import requests
+from typing import List, Union
 
 import allure
-from commonlib.io_utils import get_logs_from_stream, get_events_from_index
+import munch
+from commonlib.io_utils import (
+    get_assets_from_index,
+    get_events_from_index,
+    get_logs_from_stream,
+)
 from loguru import logger
 
 FINDINGS_BACKOFF_SECONDS = 5
@@ -76,6 +80,46 @@ def get_ES_evaluation(
     return None
 
 
+def get_ES_assets(
+    elastic_client,
+    timeout,
+    type_,
+    sub_type,
+    exec_timestamp,
+    resource_identifier=lambda r: True,
+) -> Union[List[munch.Munch], None]:
+    start_time = time.time()
+    latest_timestamp = exec_timestamp
+
+    while time.time() - start_time < timeout:
+        try:
+            time.sleep(EVALUATION_BACKOFF_SECONDS)
+            assets = get_assets_from_index(
+                elastic_client,
+                type_,
+                sub_type,
+                latest_timestamp,
+            )
+        except Exception as e:
+            logger.debug(e)
+            continue
+
+        filtered_assets = []
+        for asset in assets:
+            asset_timestamp = datetime.datetime.strptime(
+                getattr(asset, "@timestamp"),
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+            )
+            if asset_timestamp > latest_timestamp:
+                latest_timestamp = asset_timestamp
+            if resource_identifier(asset):
+                filtered_assets.append(asset)
+        if len(filtered_assets) > 0:
+            return filtered_assets
+
+    return None
+
+
 def get_logs_evaluation(
     k8s,
     timeout,
@@ -130,34 +174,6 @@ def get_logs_evaluation(
                     if resource_identifier(resource):
                         return finding.result.evaluation
     return None
-
-
-def dict_contains(small, big):
-    """
-    Checks if the small dict like object is contained inside the big object
-    @param small: dict like object
-    @param big: dict like object
-    @return: true iff the small dict like object is contained inside the big object
-    """
-    if isinstance(small, dict):
-        if not set(small.keys()) <= set(big.keys()):
-            return False
-        for key in small.keys():
-            if not dict_contains(small.get(key), big.get(key)):
-                return False
-        return True
-
-    return small == big
-
-
-def get_resource_identifier(body):
-    def resource_identifier(resource):
-        if getattr(resource, "to_dict", None):
-            return dict_contains(body, resource.to_dict())
-        if getattr(resource, "__dict__", None):
-            return dict_contains(body, dict(resource))
-
-    return resource_identifier
 
 
 def wait_for_cycle_completion(elastic_client, nodes: list) -> bool:
@@ -215,52 +231,6 @@ def is_timeout(start_time: time, timeout: int) -> bool:
     return time.time() - start_time > timeout
 
 
-def command_contains_arguments(command, arguments_dict):
-    args = command.split()[1:]
-    args_dict = {}
-    for arg in args:
-        key, val = arg.split("=", 1)
-        args_dict[key] = val
-
-    set_dict = arguments_dict.get("set", {})
-    unset_list = arguments_dict.get("unset", [])
-
-    for key, val in set_dict.items():
-        arg_val = args_dict.get(key)
-        if val != arg_val:
-            return False
-
-    for key in unset_list:
-        if key in args_dict:
-            return False
-
-    return True
-
-
-def config_contains_arguments(config, arguments_dict):
-    set_dict = arguments_dict.get("set", {})
-    unset_list = arguments_dict.get("unset", [])
-
-    if not dict_contains(set_dict, config):
-        return False
-
-    for arg in unset_list:
-        current = config
-        arg_set = True
-
-        for arg_part in arg.split("."):
-            if (not isinstance(current, dict)) or (arg_part not in current):
-                arg_set = False
-                break
-
-            current = current[arg_part]
-
-        if arg_set:
-            return False
-
-    return True
-
-
 def get_findings(elastic_client, config_timeout, query, sort, match_type):
     """
     Retrieves data from an Elasticsearch index using the specified query and sort parameters.
@@ -303,30 +273,6 @@ def get_findings(elastic_client, config_timeout, query, sort, match_type):
         time.sleep(FINDINGS_BACKOFF_SECONDS)
 
     return result
-
-
-def get_telemetry(config):
-    """
-    This function create eAPI call to Kibana snapshot telemetry api and return is payload.
-    Example:
-    @param config: configuration object contains kibana host and auth
-    @return: Telemetry payload
-    """
-    method = "POST"
-    url = f"{config.kibana_url}/internal/telemetry/clusters/_stats"
-    headers = {
-        "Content-Type": "application/json",
-        "kbn-xsrf": "true",
-        "elastic-api-version": "2",
-        "x-elastic-internal-origin": "Kibana",
-    }
-    auth = config.basic_auth
-
-    response = requests.request(method=method, url=url, headers=headers, auth=auth, json={"unencrypted": "true"})
-    if response.status_code != 200:
-        raise Exception("Error in fetching telemetry data")
-
-    return response.json()
 
 
 def res_identifier(field_chain: str, case_identifier, eval_resource) -> bool:

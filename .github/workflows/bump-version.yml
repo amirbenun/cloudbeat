@@ -1,0 +1,62 @@
+name: Bump Cloudbeat version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_cloudbeat:
+        description: "Bump cloudbeat version"
+        type: boolean
+        required: true
+        default: true
+      bump_integration:
+        description: "Bump cloud security posture integration version"
+        type: boolean
+        required: true
+        default: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.CLOUDSEC_MACHINE_TOKEN }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.CSPM_CFT_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.CSPM_CFT_SECRET_ACCESS_KEY }}
+  SNYK_ORG_ID: ${{ secrets.SNYK_ORG_ID }}
+  SNYK_API_KEY: ${{ secrets.SNYK_API_KEY }}
+  SNYK_INTEGRATION_ID: ${{ secrets.SNYK_INTEGRATION_ID }}
+
+jobs:
+  bump_version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Cloudbeat Repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.CLOUDSEC_MACHINE_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Cloudbeat Versions
+        run: |
+          current=$(grep defaultBeatVersion version/version.go | cut -f2 -d "\"")
+          IFS='.' read -r major minor patch <<< "$current"
+          next="$major.$((minor+1)).$patch"
+          echo "current: $current"
+          echo "next: $next"
+          echo "CURRENT_CLOUDBEAT_VERSION=$current" >> $GITHUB_ENV
+          echo "NEXT_CLOUDBEAT_VERSION=$next" >> $GITHUB_ENV
+
+      - name: Setup Git User
+        run: |
+          git config --global user.email "cloudsecmachine@users.noreply.github.com"
+          git config --global user.name "Cloud Security Machine"
+
+      - name: Bump Cloudbeat
+        if: ${{ inputs.bump_cloudbeat }}
+        # bump_cloudbeat.sh will create multiple PRs with different HEAD branches
+        env:
+          GIT_BASE_BRANCH: ${{ github.ref_name }}
+        run: scripts/bump_cloudbeat.sh
+
+      - name: Bump Cloud Security Posture Integration
+        if: ${{ inputs.bump_integration }}
+        # we need to run bump_integration.sh from the main branch
+        run: git checkout origin/main && scripts/bump_integration.sh

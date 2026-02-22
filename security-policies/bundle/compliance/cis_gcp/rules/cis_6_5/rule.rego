@@ -6,13 +6,10 @@ import data.compliance.policy.gcp.data_adapter
 import future.keywords.if
 import future.keywords.in
 
-finding = result if {
+finding := result if {
 	data_adapter.is_sql_instance
 
-	result := common.generate_result_without_expected(
-		common.calculate_result(assert.is_false(is_publicly_accessible)),
-		data_adapter.resource,
-	)
+	result := common.generate_evaluation_result(common.calculate_result(assert.is_false(is_publicly_accessible)))
 }
 
 is_publicly_accessible if {
@@ -22,4 +19,4 @@ is_publicly_accessible if {
 		[{"value": ""}],
 	)
 	networks[i].value == "0.0.0.0/0"
-} else = false
+} else := false

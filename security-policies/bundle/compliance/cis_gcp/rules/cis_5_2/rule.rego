@@ -4,18 +4,15 @@ import data.compliance.lib.common
 import data.compliance.policy.gcp.data_adapter
 import future.keywords.if
 
-default rule_evaluation = false
+default rule_evaluation := false
 
 # Ensure That Cloud Storage Buckets Have Uniform Bucket- Level Access Enabled.
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_storage_bucket
 
 	# set result
-	result := common.generate_result_without_expected(
-		common.calculate_result(rule_evaluation),
-		{"GCS Bucket": input.resource},
-	)
+	result := common.generate_evaluation_result(common.calculate_result(rule_evaluation))
 }
 
 rule_evaluation if {

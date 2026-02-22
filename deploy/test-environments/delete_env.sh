@@ -17,11 +17,125 @@ AWS_REGION="eu-west-1" # Add your desired default AWS region here
 DELETED_ENVS=()
 FAILED_ENVS=()
 
+# Function to set environment variables from env_config.json
+function set_env_vars_from_config() {
+    local env=$1
+    local bucket_folder=$2
+
+    # Try to download env_config.json
+    if aws s3 cp "$BUCKET/$bucket_folder/env_config.json" /tmp/env_config.json 2>/dev/null; then
+        echo "Reading environment configuration from env_config.json for $env"
+
+        # Extract values with defaults for backward compatibility
+        # Note: If ess_region_mapped doesn't exist, default to gcp-us-west2 (most common case)
+        # We can't map ess_region without serverless_mode info, so we use a safe default
+        local ess_region_mapped
+        ess_region_mapped=$(jq -r 'if .ess_region_mapped then .ess_region_mapped else "gcp-us-west2" end' /tmp/env_config.json)
+        local ec_url
+        ec_url=$(jq -r '.ec_url // "https://cloud.elastic.co"' /tmp/env_config.json)
+        local serverless_mode
+        serverless_mode=$(jq -r '.serverless_mode // "false"' /tmp/env_config.json)
+        local deployment_template
+        deployment_template=$(jq -r '.deployment_template // "gcp-storage-optimized"' /tmp/env_config.json)
+        local max_size
+        max_size=$(jq -r '.max_size // "128g"' /tmp/env_config.json)
+
+        # Extract ess_region to determine which API key to use
+        local ess_region
+        ess_region=$(jq -r '.ess_region // "production-cft"' /tmp/env_config.json)
+
+        # Parse environment type from ess_region (format: {env}-{cloud}, e.g., production-cft, qa-gcp, staging-aws)
+        local env_type="${ess_region%%-*}"
+
+        # Convert env_type to uppercase and construct the environment variable name
+        local env_type_upper
+        env_type_upper=$(echo "$env_type" | tr '[:lower:]' '[:upper:]')
+        local api_key_var="EC_API_KEY_${env_type_upper}"
+
+        # Set Terraform variables
+        export TF_VAR_ess_region="$ess_region_mapped"
+        export TF_VAR_ec_url="$ec_url"
+        export TF_VAR_serverless_mode="$serverless_mode"
+        export TF_VAR_deployment_template="$deployment_template"
+        export TF_VAR_max_size="$max_size"
+
+        # Set TF_VAR_ec_api_key based on environment type using indirect variable reference
+        if [[ -n "${!api_key_var:-}" ]]; then
+            export TF_VAR_ec_api_key="${!api_key_var}"
+            echo "Using ${env_type_upper} API key for $env (ess_region: $ess_region)"
+        else
+            echo "Warning: ${api_key_var} not set, falling back to TF_VAR_ec_api_key if available"
+        fi
+
+        echo "Set TF_VAR_ess_region=$TF_VAR_ess_region"
+        echo "Set TF_VAR_ec_url=$TF_VAR_ec_url"
+        echo "Set TF_VAR_serverless_mode=$TF_VAR_serverless_mode"
+        echo "Set TF_VAR_deployment_template=$TF_VAR_deployment_template"
+        echo "Set TF_VAR_max_size=$TF_VAR_max_size"
+        echo "Set TF_VAR_ec_api_key (from $env_type environment)"
+
+        rm -f /tmp/env_config.json
+    else
+        # If env_config.json doesn't exist, use defaults for backward compatibility
+        echo "env_config.json not found for $env, using defaults"
+        export TF_VAR_ess_region="gcp-us-west2"
+        export TF_VAR_ec_url="https://cloud.elastic.co"
+        export TF_VAR_serverless_mode="false"
+        export TF_VAR_deployment_template="gcp-storage-optimized"
+        export TF_VAR_max_size="128g"
+        # If no env_config.json, rely on existing TF_VAR_ec_api_key if set
+        echo "Using existing TF_VAR_ec_api_key if available"
+    fi
+
+    # Final validation: ensure TF_VAR_ec_api_key is set
+    if [[ -z "${TF_VAR_ec_api_key:-}" ]]; then
+        echo "Error: TF_VAR_ec_api_key is not set for environment $env" >&2
+        echo "Please ensure EC_API_KEY_PRODUCTION, EC_API_KEY_STAGING, or EC_API_KEY_QA is set, or provide TF_VAR_ec_api_key" >&2
+        return 1
+    fi
+}
+
+# Function to delete all terraform states from given bucket
+function delete_all_states() {
+    local bucket_folder=$1
+    echo "Deleting all Terraform states from bucket: $bucket_folder"
+
+    # Set environment variables from env_config.json
+    if ! set_env_vars_from_config "$bucket_folder" "$bucket_folder"; then
+        echo "Failed to set environment variables for $bucket_folder"
+        FAILED_ENVS+=("$bucket_folder")
+        return 1
+    fi
+
+    states=("cdr" "cis" "elk-stack")
+    # Get all states
+    for state in "${states[@]}"; do
+        local state_file="./$state/terraform.tfstate"
+        aws s3 cp "$BUCKET/$bucket_folder/${state}-terraform.tfstate" "$state_file" || true
+    done
+    # Destroy all states and remove environment data from S3
+    if ./manage_infrastructure.sh "all" "destroy" &&
+        aws s3 rm "$BUCKET/$bucket_folder" --recursive; then
+        echo "Successfully deleted $bucket_folder"
+        DELETED_ENVS+=("$bucket_folder")
+    else
+        echo "Failed to delete $bucket_folder"
+        FAILED_ENVS+=("$bucket_folder")
+    fi
+}
+
 # Function to delete Terraform environment
 function delete_environment() {
     local ENV=$1
     echo "Deleting Terraform environment: $ENV"
     tfstate="./$ENV-terraform.tfstate"
+
+    # Set environment variables from env_config.json
+    if ! set_env_vars_from_config "$ENV" "$ENV"; then
+        echo "Failed to set environment variables for $ENV"
+        FAILED_ENVS+=("$ENV")
+        return 1
+    fi
 
     # Copy state file
     if aws s3 cp "$BUCKET/$ENV/terraform.tfstate" "$tfstate"; then
@@ -87,7 +201,13 @@ done
 
 # Ensure required environment variables and parameters are set
 : "${ENV_PREFIX:?$(echo "Missing -p|--prefix. Please provide an environment prefix to delete" && usage && exit 1)}"
-: "${TF_VAR_ec_api_key:?Please set TF_VAR_ec_api_key with an Elastic Cloud API Key}"
+
+# Note: TF_VAR_ec_api_key will be set per-environment in set_env_vars_from_config
+# But we still need at least one API key available as fallback
+if [[ -z "${EC_API_KEY_PRODUCTION:-}" ]] && [[ -z "${EC_API_KEY_STAGING:-}" ]] && [[ -z "${EC_API_KEY_QA:-}" ]] && [[ -z "${TF_VAR_ec_api_key:-}" ]]; then
+    echo "Error: At least one of EC_API_KEY_PRODUCTION, EC_API_KEY_STAGING, EC_API_KEY_QA, or TF_VAR_ec_api_key must be set" >&2
+    exit 1
+fi
 
 BUCKET=s3://tf-state-bucket-test-infra
 ALL_ENVS=$(aws s3 ls $BUCKET/"$ENV_PREFIX" | awk '{print $2}' | sed 's/\///g')
@@ -101,7 +221,9 @@ else
     GCP_FILTER="name:'$ENV_PREFIX*'"
 fi
 
-ALL_GCP_DEPLOYMENTS=$(gcloud deployment-manager deployments list --filter="$GCP_FILTER" --format="value(name)")
+while IFS= read -r line; do
+    ALL_GCP_DEPLOYMENTS+=("$line")
+done < <(gcloud deployment-manager deployments list --filter="$GCP_FILTER" --format="value(name)")
 
 # Divide environments into those to be deleted and those to be skipped
 TO_DELETE_ENVS=()
@@ -129,7 +251,11 @@ fi
 
 # Delete the Terraform environments
 for ENV in "${TO_DELETE_ENVS[@]}"; do
-    delete_environment "$ENV"
+    if aws s3 ls "$BUCKET/$ENV/terraform.tfstate" >/dev/null 2>&1; then
+        delete_environment "$ENV"
+    else
+        delete_all_states "$ENV"
+    fi
 done
 
 # Print summary of environment deletions
@@ -160,40 +286,15 @@ printf "%s\n" "${DELETED_STACKS[@]}"
 echo "Failed to delete CloudFormation stacks (${#FAILED_STACKS[@]}):"
 printf "%s\n" "${FAILED_STACKS[@]}"
 
-DELETED_DEPLOYMENTS=()
-FAILED_DEPLOYMENTS=()
-
-PROJECT_NAME=$(gcloud config get-value core/project)
-PROJECT_NUMBER=$(gcloud projects list --filter="${PROJECT_NAME}" --format="value(PROJECT_NUMBER)")
-export PROJECT_NAME
-export PROJECT_NUMBER
-
-# Delete GCP Deployments
-for DEPLOYMENT in $ALL_GCP_DEPLOYMENTS; do
-    # Add the needed roles to delete the templates to the project using the deployment manager
-    gcloud projects add-iam-policy-binding "${PROJECT_NAME}" --member=serviceAccount:"${PROJECT_NUMBER}"@cloudservices.gserviceaccount.com --role=roles/iam.roleAdmin --no-user-output-enabled
-    gcloud projects add-iam-policy-binding "${PROJECT_NAME}" --member=serviceAccount:"${PROJECT_NUMBER}"@cloudservices.gserviceaccount.com --role=roles/resourcemanager.projectIamAdmin --no-user-output-enabled
-
-    if gcloud deployment-manager deployments delete "$DEPLOYMENT" -q; then
-        echo "Successfully deleted GCP deployment: $DEPLOYMENT"
-        DELETED_DEPLOYMENTS+=("$DEPLOYMENT")
-    else
-        echo "Failed to delete GCP deployment: $DEPLOYMENT"
-        FAILED_DEPLOYMENTS+=("$DEPLOYMENT")
-    fi
-
-    # Remove the roles required to deploy the DM templates
-    gcloud projects remove-iam-policy-binding "${PROJECT_NAME}" --member=serviceAccount:"${PROJECT_NUMBER}"@cloudservices.gserviceaccount.com --role=roles/iam.roleAdmin --no-user-output-enabled
-    gcloud projects remove-iam-policy-binding "${PROJECT_NAME}" --member=serviceAccount:"${PROJECT_NUMBER}"@cloudservices.gserviceaccount.com --role=roles/resourcemanager.projectIamAdmin --no-user-output-enabled
-
-done
-
-# Print summary of gcp deployments deletions
-echo "Successfully deleted GCP deployments (${#DELETED_DEPLOYMENTS[@]}):"
-printf "%s\n" "${DELETED_DEPLOYMENTS[@]}"
-
-echo "Failed to delete GCP deployments (${#FAILED_DEPLOYMENTS[@]}):"
-printf "%s\n" "${FAILED_DEPLOYMENTS[@]}"
+# Delete GCP deployments
+# Check if ALL_GCP_DEPLOYMENTS is empty
+if [ ${#ALL_GCP_DEPLOYMENTS[@]} -eq 0 ]; then
+    echo "No GCP deployments to delete."
+else
+    PROJECT_NAME=$(gcloud config get-value core/project)
+    PROJECT_NUMBER=$(gcloud projects list --filter="${PROJECT_NAME}" --format="value(PROJECT_NUMBER)")
+    ./delete_gcp_env.sh "$PROJECT_NAME" "$PROJECT_NUMBER" "${ALL_GCP_DEPLOYMENTS[@]}"
+fi
 
 # Delete Azure groups
 FAILED_AZURE_GROUPS=()

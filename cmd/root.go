@@ -18,17 +18,19 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/elastic/beats/v7/libbeat/cmd"
 	"github.com/elastic/beats/v7/libbeat/cmd/instance"
 	"github.com/elastic/beats/v7/libbeat/common/reload"
+	"github.com/elastic/beats/v7/libbeat/publisher/processing"
 	_ "github.com/elastic/beats/v7/x-pack/libbeat/include"
 	"github.com/elastic/beats/v7/x-pack/libbeat/management"
 	"github.com/elastic/elastic-agent-client/v7/pkg/client"
 	"github.com/elastic/elastic-agent-client/v7/pkg/proto"
 
-	"github.com/elastic/cloudbeat/beater"
+	"github.com/elastic/cloudbeat/internal/beater"
 	"github.com/elastic/cloudbeat/version"
 )
 
@@ -36,7 +38,16 @@ import (
 var Name = "cloudbeat"
 
 // RootCmd to handle beats cli
-var RootCmd = cmd.GenRootCmdWithSettings(beater.New, instance.Settings{Name: Name, Version: version.CloudbeatSemanticVersion()})
+var RootCmd = cmd.GenRootCmdWithSettings(
+	beater.New,
+	instance.Settings{
+		Name:    Name,
+		Version: version.CloudbeatSemanticVersion(),
+		// Supply our own processing pipeline. Same as processing.MakeDefaultBeatSupport, but without
+		// `processing.WithHost`.
+		Processing: processing.MakeDefaultSupport(true, nil, processing.WithECS, processing.WithAgentMeta()),
+	},
+)
 
 func cloudbeatCfg(rawIn *proto.UnitExpectedConfig, agentInfo *client.AgentInfo) ([]*reload.ConfigWithMeta, error) {
 	modules, err := management.CreateInputsFromStreams(rawIn, "logs", agentInfo)
@@ -47,12 +58,12 @@ func cloudbeatCfg(rawIn *proto.UnitExpectedConfig, agentInfo *client.AgentInfo) 
 	config := rawIn.Source.AsMap()
 	packagePolicyID, ok := config["package_policy_id"]
 	if !ok {
-		return nil, fmt.Errorf("'package_policy_id' element does not exist")
+		return nil, errors.New("'package_policy_id' element does not exist")
 	}
 
 	packagePolicyRevision, ok := config["revision"]
 	if !ok {
-		return nil, fmt.Errorf("'revision' element does not exist")
+		return nil, errors.New("'revision' element does not exist")
 	}
 
 	for i := range modules {

@@ -18,130 +18,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit_tests:
-    name: Unit Tests
-    runs-on: ubuntu-20.04
-    timeout-minutes: 40
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-
-      - name: Set up GO (with caching)
-        uses: magnetikonline/action-golang-cache@v4
-        with:
-          go-version-file: .go-version
-
-      - name: Mage build bundle before unit tests
-        uses: magefile/mage-action@v3
-        with:
-          args: buildOpaBundle
-
-      - name: Copy bundle to required dirs
-        run: |
-          cp bundle.tar.gz evaluator/
-
-      - name: Unit-Test
-        run: |
-          go install gotest.tools/gotestsum
-          GOOS=linux TEST_DIRECTORY=./...  gotestsum --format pkgname -- -race -coverpkg=./... -coverprofile=cover.out.tmp
-          cat cover.out.tmp | grep -v "mock_.*.go" > cover.out # remove mock files from coverage report
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: coverage-file
-          path: cover.out
-
-  coverage:
-    name: Coverage report
-    needs: unit_tests
-    runs-on: ubuntu-20.04
-    timeout-minutes: 10
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-
-      - name: Init Hermit
-        run: ./bin/hermit env -r >> $GITHUB_ENV
-
-      - name: Install goveralls
-        run: go install github.com/mattn/goveralls@latest
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: coverage-file
-
-      - name: Send coverage
-        env:
-          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: goveralls -coverprofile=cover.out -service=github
 
   manifest_tests:
     name: Manifest Tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Get diff k8s manifests
-        uses: technote-space/get-diff-action@v6
+        uses: technote-space/get-diff-action@f27caffdd0fb9b13f4fc191c016bb4e0632844af # v6
         with:
           PATTERNS: ${{ env.K8S_MANIFEST_DIR }}/**
 
       - name: Run K8s manifest tests
         if: env.GIT_DIFF
-        uses: stefanprodan/kube-tools@v1
+        uses: stefanprodan/kube-tools@49504f5a42faa937ed11d7705b995416f8e55271 # v1
         with:
           kubectl: 1.18.4
           kubeval: v0.16.1
           command: |
             kubeval --strict -d ${{ env.K8S_MANIFEST_DIR }} --ignore-missing-schemas --ignored-filename-patterns kustomization,kind,patch,cloudbeat,cloudformation,deployment-manager --skip-kinds ClusterConfig
-
-  golangci:
-    name: golangci-lint
-    runs-on: ubuntu-20.04
-    timeout-minutes: 15
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ (github.event.pull_request_target || github.event.pull_request).head.repo.full_name }}
-          ref: ${{ (github.event.pull_request_target || github.event.pull_request).head.sha }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: .go-version
-          cache: false
-
-      - name: Go linter
-        uses: golangci/golangci-lint-action@v3.7.0
-        with:
-          version: latest
-          args: --whole-files --verbose
-
-  dependency-review:
-    runs-on: ubuntu-20.04
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v3
-
-  terraform-linter:
-    name: terraform-lint
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Init Hermit
-        run: ./bin/hermit env -r >> $GITHUB_ENV
-
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive

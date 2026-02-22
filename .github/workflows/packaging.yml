@@ -20,7 +20,7 @@ concurrency:
 jobs:
   package_beat:
     name: Package Cloudbeat
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -28,15 +28,13 @@ jobs:
         types: [tar.gz, docker]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup GO (with caching)
-        uses: magnetikonline/action-golang-cache@v4
+      - name: Hermit Environment
+        uses: ./.github/actions/hermit
         with:
-          go-version-file: .go-version
-
-      - name: Init Hermit
-        run: ./bin/hermit env -r >> $GITHUB_ENV
+          init-tools: "true"
+          free-disk: "true"
 
       - name: Packaging
         run: |

@@ -1,19 +1,20 @@
 """
 Global pytest file for fixtures and test configs
 """
+
+import functools
 import logging
 import sys
-import functools
 import time
 
-import pytest
 import configuration
-from commonlib.agents_map import AgentExpectedMapping, AgentComponentMapping
-from commonlib.kubernetes import KubernetesHelper
-from commonlib.elastic_wrapper import ElasticWrapper
-from commonlib.docker_wrapper import DockerWrapper
-from commonlib.io_utils import FsClient
+import pytest
 from _pytest.logging import LogCaptureFixture
+from commonlib.agents_map import AgentComponentMapping, AgentExpectedMapping
+from commonlib.docker_wrapper import DockerWrapper
+from commonlib.elastic_wrapper import ElasticWrapper
+from commonlib.io_utils import FsClient
+from commonlib.kubernetes import KubernetesHelper
 from loguru import logger
 
 
@@ -176,6 +177,15 @@ def kspm_client():
     return create_es_client(configuration.elasticsearch.kspm_index)
 
 
+@pytest.fixture
+def asset_inventory_client():
+    """
+    This function (fixture) instantiate ElasticWrapper.
+    @return: ElasticWrapper client with asset inventory index.
+    """
+    return create_es_client(configuration.elasticsearch.asset_inventory_index)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def api_client():
     """
@@ -276,6 +286,7 @@ def create_es_client(index: str) -> ElasticWrapper:
         configuration.elasticsearch.url,
         configuration.elasticsearch.basic_auth,
         index,
+        configuration.elasticsearch.use_ssl,
     )
     logger.info(f"client with ElasticSearch url: {configuration.elasticsearch.url}")
     return es_client
@@ -296,6 +307,4 @@ def agents_actual_components() -> AgentComponentMapping:
     This function (fixture) instantiate an AgentComponentMapping.
     @return: an mapping of the agent components.
     """
-    mapping = AgentComponentMapping()
-    mapping.load_map()
-    return mapping
+    return AgentComponentMapping()

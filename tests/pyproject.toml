@@ -1,29 +1,49 @@
-[tool.poetry]
+[project]
 name = "tests"
 version = "0.1.0"
 description = "Test project for cloudbeat agent"
-authors = ["Dmitry Gurevich <dmitry.gurevich@elastic.co>"]
+authors = [
+    {name = "Dmitry Gurevich", email = "dmitry.gurevich@elastic.co"}
+]
+requires-python = ">=3.9"
+dependencies = [
+    "pytest >= 7.1.1",
+    "munch ~= 3",
+    "kubernetes >= 23.3.0",
+    "elasticsearch >= 8.1.0",
+    "allure-pytest >= 2.9.45",
+    "pytest-xdist >= 2.5.0",
+    "docker >= 7.0.0",
+    "pytest-order >= 1.0.1",
+    "pytest-dependency >= 0.5.1",
+    "pylint >= 2.14.2",
+    "loguru ~= 0.7.0",
+    "requests >= 2.32.2",
+    "ruamel-yaml >= 0.18.5",
+    "jinja2 >= 3.1.5",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-pytest = "^7.1.1"
-munch = "^2.5.0"
-kubernetes = "^23.3.0"
-elasticsearch = "^8.1.0"
-allure-pytest = "^2.9.45"
-pytest-xdist = "^2.5.0"
-docker = "^6.0.0"
-pytest-order = "^1.0.1"
-pytest-dependency = "^0.5.1"
-pylint = "^2.14.2"
-loguru = "^0.6.0"
-requests = "^2.31.0"
+[tool.poetry]
+packages = [
+    {include="fleet_api"}
+]
+name = "tests"
+version = "0.1.0"
+description = "Test project for cloudbeat agent"
+authors = ["Cloudbeat Team"]
 
-[tool.poetry.dev-dependencies]
+#[tool.poetry.requires-plugins]
+#poetry-plugin-export = ">=1.8"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
 
 [tool.pytest.ini_options]
 addopts = "--tb=line -rA --no-header -p no:warnings -s -v --alluredir=tests/allure/results --clean-alluredir"
@@ -32,24 +52,33 @@ markers = [
     "pre_merge",
     "pre_merge_agent",
     "sanity",
+    "agentless",
     # test target markers
-    "file_system_rules",
-    "k8s_object_rules",
-    "process_api_server_rules",
-    "process_controller_manager_rules",
-    "process_etcd_rules",
-    "process_api_server_rules",
-    "process_scheduler_rules",
-    "process_kubelet_rules",
+    "k8s_file_system_rules",
+    "k8s_object_psp_rules",
+    "k8s_process_rules",
     "eks_file_system_rules",
     "eks_process_rules",
     "eks_k8s_objects_rules",
     "eks_service_rules",
-    "aws_s3_service_rules",
-    "aws_iam_rules",
-    "aws_logging_rules",
-    "aws_ec2_rules",
-    "aws_rds_rules",
-    "aws_vpc_rules",
-    "aws_monitoring_rules",
+    "cspm_aws_s3_service_rules",
+    "cspm_aws_iam_rules",
+    "cspm_aws_logging_rules",
+    "cspm_aws_ec2_rules",
+    "cspm_aws_rds_rules",
+    "cspm_aws_vpc_rules",
+    "cspm_aws_monitoring_rules",
+    "cspm_azure_app_service_rules",
+    "cspm_azure_database_service_rules",
+    "cspm_azure_identity_access_management_rules",
+    "cspm_azure_key_vault_rules",
+    "cspm_azure_logging_and_monitoring_rules",
+    "cspm_azure_networking_rules",
+    "cspm_azure_storage_account_rules",
+    "cspm_azure_virtual_machine_rules",
+    "cspm_azure_microsoft_defender_rules",
+    "asset_inventory",
+    "asset_inventory_aws",
+    "asset_inventory_azure",
+    "asset_inventory_gcp",
 ]

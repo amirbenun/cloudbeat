@@ -1,0 +1,105 @@
+name: Unit Tests and Lints
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "[0-9]+.[0-9]+"
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+      - "[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Hermit Environment
+        uses: ./.github/actions/hermit
+        with:
+          init-tools: "true"
+          free-disk: "true"
+
+      - name: Pre-commit Hooks
+        env:
+          # Skipping golangci-lint as it's tested by golangci-lint
+          SKIP: golangci-lint
+        shell: bash
+        run: |
+          pre-commit run --all-files
+
+      - name: golangci-lint
+        shell: bash
+        run: golangci-lint run
+
+      - name: Mage Check
+        shell: bash
+        run: mage check
+
+      - name: Mage checkLicenseHeaders
+        shell: bash
+        run: mage checkLicenseHeaders
+
+      - name: Validate mocks
+        shell: bash
+        run: just validate-mocks
+
+      - name: Terraform fmt
+        shell: bash
+        run: terraform fmt -check -recursive
+
+      - name: Show git diff on failure
+        shell: bash
+        if: ${{ failure() }}
+        run: git diff
+
+  unit-test:
+    name: Unit Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Hermit Environment
+        uses: ./.github/actions/hermit
+        with:
+          init-tools: "true"
+          free-disk: "true"
+
+      - name: Build opa bundle
+        shell: bash
+        run: mage buildOpaBundle
+
+      - name: Unit-Test
+        shell: bash
+        run: |
+          go install gotest.tools/gotestsum
+          GOOS=linux TEST_DIRECTORY=./... gotestsum --format pkgname -- -race -coverpkg=./... -coverprofile=cover.out.tmp
+          grep -v "mock.go" cover.out.tmp | grep -v mock_old.go | grep -v "elastic/cloudbeat/deploy" | grep -v "internal/inventory/asset.go" > cover.out # remove mock files and deploy dir
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-file
+          path: cover.out
+          overwrite: true
+
+      - name: Send coverage
+        env:
+          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          go install github.com/mattn/goveralls@latest
+          goveralls -coverprofile=cover.out -service=github

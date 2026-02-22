@@ -35,6 +35,7 @@ func init() {
 				vcsTime, _ = time.Parse(time.RFC3339, setting.Value)
 			case "vcs.revision":
 				vcsRevision = setting.Value
+			default:
 			}
 		}
 	}
@@ -52,6 +53,9 @@ func cloudbeatCommitTime() string {
 
 // CloudbeatSemanticVersion returns the current cloudbeat version.
 func CloudbeatSemanticVersion() string {
+	if qualifier != "" {
+		return defaultBeatVersion + "-" + qualifier
+	}
 	return defaultBeatVersion
 }
 

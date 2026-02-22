@@ -4,24 +4,20 @@ import data.compliance.lib.common
 import data.compliance.policy.gcp.data_adapter
 import future.keywords.if
 
-duration = sprintf("%dh", [90 * 24]) # 90 days converted to hours
+duration := sprintf("%dh", [90 * 24]) # 90 days converted to hours
 
-default rule_evaluation = false
+default rule_evaluation := false
 
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_cloudkms_crypto_key
 
 	# In order for an encryption key to be available,
 	# it needs to have a primary key version which is enabled
-	data_adapter.resource.data.primary
 	data_adapter.resource.data.primary.state == "ENABLED"
 
 	# set result
-	result := common.generate_result_without_expected(
-		common.calculate_result(rule_evaluation),
-		{"KMS": data_adapter.resource},
-	)
+	result := common.generate_evaluation_result(common.calculate_result(rule_evaluation))
 }
 
 rule_evaluation if {

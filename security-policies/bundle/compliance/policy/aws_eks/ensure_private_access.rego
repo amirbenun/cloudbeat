@@ -8,14 +8,14 @@ import future.keywords.if
 is_only_private(cluster, cidr_allowed) if {
 	cluster.ResourcesVpcConfig.EndpointPrivateAccess
 	public_access_is_restricted(cluster, cidr_allowed)
-} else = false
+} else := false
 
 public_access_is_restricted(cluster, _) if {
 	not cluster.ResourcesVpcConfig.EndpointPublicAccess
 }
 
 public_access_is_restricted(cluster, cidr_allowed) if {
-	cidr_allowed
+	cidr_allowed == true
 
 	cluster.ResourcesVpcConfig.EndpointPublicAccess
 	public_access_cidrs := cluster.ResourcesVpcConfig.PublicAccessCidrs
@@ -27,7 +27,7 @@ public_access_is_restricted(cluster, cidr_allowed) if {
 }
 
 # Ensure there Kuberenetes endpoint private access is enabled
-finding(cidr_allowed) = result if {
+finding(cidr_allowed) := result if {
 	# filter
 	data_adapter.is_aws_eks
 
@@ -47,7 +47,7 @@ finding(cidr_allowed) = result if {
 	)
 }
 
-cidr_evidence(config, cidr_allowed) = result if {
-	cidr_allowed
+cidr_evidence(config, cidr_allowed) := result if {
+	cidr_allowed == true
 	result := {"public_access_cidrs": config.PublicAccessCidrs}
-} else = {}
+} else := {}

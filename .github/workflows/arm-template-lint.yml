@@ -1,0 +1,46 @@
+name: ARM Templates
+
+on:
+  pull_request:
+    paths:
+      - "deploy/azure/*.json"
+  push:
+    branches:
+      - main
+      - "8.19"
+    paths:
+      - "deploy/azure/*.json"
+
+jobs:
+  lint-arm-ttk:
+    name: Lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template:
+          - "ARM-for-organization-account.json"
+          - "ARM-for-single-account.json"
+          - "ARM-for-cloud-connectors-single-account.json"
+          - "ARM-for-cloud-connectors-organization-account.json"
+        include:
+          - template: "ARM-for-single-account.json"
+            skip: "ResourceIds should not contain"
+    steps:
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Checkout arm-ttk
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+        with:
+          repository: Azure/arm-ttk
+          path: arm-ttk
+
+      - name: Run ARM TTK
+        shell: pwsh
+        run: |
+          Import-Module ./arm-ttk/arm-ttk/arm-ttk.psd1
+          $testParams = @{
+            TemplatePath = "./deploy/azure/${{ matrix.template }}"
+            Skip = "${{ matrix.skip }}"
+          }
+          Test-AzTemplate @testParams

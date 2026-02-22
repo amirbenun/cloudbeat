@@ -1,23 +1,26 @@
 name: Publish-CloudFormation
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
       - "[0-9]+.[0-9]+"
     paths:
+      - deploy/asset-inventory-cloudformation/*.yml
       - deploy/cloudformation/*.yml
       - scripts/publish_cft.sh
       - .github/workflows/publish-cloudformation.yml
+      - version/version.go
 
 jobs:
   publish_cloudformation:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2
         with:
           aws-access-key-id: ${{ secrets.CSPM_CFT_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.CSPM_CFT_SECRET_ACCESS_KEY }}

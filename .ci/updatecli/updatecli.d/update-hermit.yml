@@ -7,16 +7,16 @@ scms:
     kind: github
     spec:
       user: '{{ requiredEnv "GIT_USER" }}'
-      email: '{{ requiredEnv "GIT_EMAIL" }}'
       owner: "{{ .github.owner }}"
       repository: "{{ .github.repository }}"
       token: '{{ requiredEnv "GITHUB_TOKEN" }}'
       username: '{{ requiredEnv "GIT_USER" }}'
       branch: '{{ requiredEnv "GIT_BRANCH" }}'
+      email: 'cloudsecmachine@elastic.co'
 
 actions:
   default:
-    title: '[updatecli] Update hermit and pre-commit dependencies'
+    title: '[updatecli] {{ requiredEnv "GIT_BRANCH" }} - Update hermit and pre-commit dependencies'
     kind: github/pullrequest
     scmid: default
     spec:

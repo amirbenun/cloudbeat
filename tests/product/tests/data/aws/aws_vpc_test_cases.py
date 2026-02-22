@@ -4,8 +4,9 @@ Cases are organized as rules.
 Each rule has one or more test cases.
 VPC rules identification is performed by resource name.
 """
+
+from ..constants import RULE_FAIL_STATUS, RULE_PASS_STATUS
 from ..eks_test_case import EksAwsServiceCase
-from ..constants import RULE_PASS_STATUS, RULE_FAIL_STATUS
 
 CIS_5_1 = "CIS 5.1"
 CIS_5_2 = "CIS 5.2"
@@ -80,7 +81,8 @@ cis_aws_vpc_5_4 = {
     "5.4 Ensure default Security Group, inbound and outbound groups exist expect: failed": cis_aws_vpc_5_4_fail,
 }
 
-cis_aws_vpc_cases = {
+# The name of this variable needs to be `tests_cases` in order to CIS Rules coverage stats to be generated
+test_cases = {
     **cis_aws_vpc_5_1,
     **cis_aws_vpc_5_2,
     **cis_aws_vpc_5_3,

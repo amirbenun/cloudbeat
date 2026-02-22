@@ -1,6 +1,7 @@
 """
 This module generates the NOTICE.txt and dependencies.csv files
 """
+
 from __future__ import print_function
 
 import argparse
@@ -28,6 +29,9 @@ notice_overrides = [
     {"name": "github.com/build-security/beats/v7", "licenceType": "Elastic"},
     {"name": "github.com/golang/glog", "licenceType": "Apache-2.0"},
     {"name": "github.com/spdx/tools-golang", "licenceFile": "LICENSE.code", "licenceType": "Apache-2.0"},
+    {"name": "github.com/aquasecurity/trivy-policies", "licenceType": "MIT"},
+    {"name": "github.com/gocsaf/csaf/v3", "licenceType": "Apache-2.0"},
+    {"name": "github.com/xi2/xz", "licenceType": "Unlicense"},
 ]
 
 # Additional third-party, non-source code dependencies, to add to the CSV output.

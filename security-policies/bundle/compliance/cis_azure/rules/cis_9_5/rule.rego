@@ -4,9 +4,9 @@ import data.compliance.lib.common
 import data.compliance.policy.azure.data_adapter
 import future.keywords.if
 
-default rule_evaluation = false
+default rule_evaluation := false
 
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_website_asset
 
@@ -18,9 +18,5 @@ finding = result if {
 }
 
 rule_evaluation if {
-	data_adapter.site_config.xManagedServiceIdentityId
-}
-
-rule_evaluation if {
-	data_adapter.site_config.managedServiceIdentityId
+	data_adapter.identity.principalId != null
 }

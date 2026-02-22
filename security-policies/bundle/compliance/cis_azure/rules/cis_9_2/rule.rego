@@ -4,7 +4,7 @@ import data.compliance.lib.common
 import data.compliance.policy.azure.data_adapter
 import future.keywords.if
 
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_website_asset
 
@@ -16,5 +16,5 @@ finding = result if {
 }
 
 is_https_only if {
-	data_adapter.site_config.httpsOnly == true
-} else = false
+	data_adapter.properties.httpsOnly == true
+} else := false

@@ -4,6 +4,8 @@ WORKDIR /usr/src/app
 
 RUN pip install poetry
 
+RUN pip install poetry-plugin-export
+
 COPY pyproject.toml poetry.lock ./
 
 RUN poetry export --without-hashes -f requirements.txt --output requirements.txt
@@ -17,7 +19,7 @@ WORKDIR /usr/src/app
 
 COPY --from=builder /usr/src/app/requirements.txt .
 
-COPY deploy/cloudbeat-pytest.yml .
+COPY test_environments/cloudbeat-pytest.yml .
 
 RUN pip install -r requirements.txt
 

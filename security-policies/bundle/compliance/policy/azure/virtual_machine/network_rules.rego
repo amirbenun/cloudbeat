@@ -4,7 +4,7 @@ import future.keywords.if
 
 vm_has_closed_port(vm, targetPort, protocol) if {
 	not vm_has_open_port(vm, targetPort, protocol)
-} else = false
+} else := false
 
 vm_has_open_port(vm, targetPort, protocol) if {
 	some i
@@ -53,7 +53,8 @@ is_port_included(p, targetPort) if {
 
 # Check if it's a single port or range explicitly mentions targetPort
 is_in_range(portRange, targetPort) if {
-	contains(portRange, targetPort)
+	not contains(portRange, "-")
+	portRange == targetPort
 }
 
 # Check if the range contains port targetPort

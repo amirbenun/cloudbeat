@@ -6,22 +6,32 @@ have been created.
 The goal of this suite is to perform basic sanity checks by querying Elasticsearch (ES) and
 verifying that there are findings of 'resource.type' for each feature.
 """
+
 import time
+
 import pytest
-from loguru import logger
-from configuration import elasticsearch
+from commonlib.agents_map import (
+    CIS_AWS_COMPONENT,
+    CIS_AZURE_COMPONENT,
+    CIS_GCP_COMPONENT,
+    AgentComponentMapping,
+    AgentExpectedMapping,
+)
 from commonlib.utils import get_findings
-from commonlib.agents_map import CIS_AWS_COMPONENT, AgentExpectedMapping, AgentComponentMapping
+from configuration import elasticsearch
+from loguru import logger
 
 CONFIG_TIMEOUT = 120
 GCP_CONFIG_TIMEOUT = 600
 CNVM_CONFIG_TIMEOUT = 3600
 
 # The timeout and backoff for waiting all agents are running the specified component.
-COMPONENTS_TIMEOUT = 180
+COMPONENTS_TIMEOUT = 300
 COMPONENTS_BACKOFF = 10
 
 AGENT_VERSION = elasticsearch.agent_version
+if AGENT_VERSION.endswith("SNAPSHOT"):
+    AGENT_VERSION = AGENT_VERSION.split("-")[0]
 
 # Check if AGENT_VERSION is provided
 if not AGENT_VERSION:
@@ -29,13 +39,14 @@ if not AGENT_VERSION:
 
 tests_data = {
     "cis_aws": [
-        "cloud-compute",
         "identity-management",
         "monitoring",
         "cloud-audit",
         "cloud-database",
         "cloud-config",
-    ],  # Exclude "cloud-storage" due to lack of fetcher control and potential delays.
+        "cloud-compute",
+        "cloud-storage",
+    ],
     "cis_gcp": [
         "cloud-compute",
         "cloud-database",
@@ -45,16 +56,21 @@ tests_data = {
         "cloud-storage",
         "cloud-dns",
         "project-management",
-        # Exclude "data-processing" due to lack of Dataproc assets in the test account.
+        "data-processing",
     ],
     "cis_azure": [
-        "configuration",
-    ],  # Azure environment is not static, so we can't guarantee findings of all types.
+        "cloud-storage",
+        "cloud-database",
+        "key-management",
+        "monitoring",
+        "cloud-dns",
+    ],  # Exclude "cloud-compute", Azure environment is not static, so we can't guarantee findings of all types.
     "cis_k8s": ["file", "process", "k8s_object"],
     "cis_eks": [
+        "file",
         "process",
         "k8s_object",
-    ],  # Optimize search findings by excluding 'file'.
+    ],
     "cnvm": ["vulnerability"],
 }
 
@@ -141,6 +157,7 @@ def test_kspm_e_k_s_findings(kspm_client, match_type):
 
 
 @pytest.mark.sanity
+@pytest.mark.agentless
 @pytest.mark.parametrize("match_type", tests_data["cis_aws"])
 def test_cspm_aws_findings(
     cspm_client,
@@ -166,13 +183,12 @@ def test_cspm_aws_findings(
         query_list = build_query_list(
             benchmark_id="cis_aws",
             match_type=match_type,
-            version=AGENT_VERSION,
             agent=agent,
         )
         query, sort = cspm_client.build_es_must_match_query(must_query_list=query_list, time_range="now-24h")
 
         results = get_findings(cspm_client, CONFIG_TIMEOUT, query, sort, match_type)
-        assert len(results) > 0, f"The resource type '{match_type}' is missing"
+        assert len(results) > 0, f"The resource type '{match_type}' is missing for agent {agent}"
 
 
 @pytest.mark.sanity
@@ -195,11 +211,22 @@ def test_cnvm_findings(cnvm_client, match_type):
     query, sort = cnvm_client.build_es_must_match_query(must_query_list=query_list, time_range="now-24h")
     results = get_findings(cnvm_client, CNVM_CONFIG_TIMEOUT, query, sort, match_type)
     assert len(results) > 0, f"The resource type '{match_type}' is missing"
+    # Check every finding has host section
+    for finding in results["hits"]["hits"]:
+        resource = finding["_source"]
+        assert "host" in resource, f"Resource '{match_type}' is missing 'host' section"
+        assert "name" in resource["host"], f"Resource '{match_type}' is missing 'host.name'"
 
 
 @pytest.mark.sanity
+@pytest.mark.agentless
 @pytest.mark.parametrize("match_type", tests_data["cis_gcp"])
-def test_cspm_gcp_findings(cspm_client, match_type):
+def test_cspm_gcp_findings(
+    cspm_client,
+    match_type,
+    agents_actual_components: AgentComponentMapping,
+    agents_expected_components: AgentExpectedMapping,
+):
     """
     Test case to check for GCP findings in CSPM.
 
@@ -213,20 +240,28 @@ def test_cspm_gcp_findings(cspm_client, match_type):
     Raises:
         AssertionError: If the resource type is missing.
     """
-    query_list = build_query_list(
-        benchmark_id="cis_gcp",
-        match_type=match_type,
-        version=AGENT_VERSION,
-    )
-    query, sort = cspm_client.build_es_must_match_query(must_query_list=query_list, time_range="now-24h")
+    gcp_agents = wait_components_list(agents_actual_components, agents_expected_components, CIS_GCP_COMPONENT)
+    for agent in gcp_agents:
+        query_list = build_query_list(
+            benchmark_id="cis_gcp",
+            match_type=match_type,
+            agent=agent,
+        )
+        query, sort = cspm_client.build_es_must_match_query(must_query_list=query_list, time_range="now-24h")
 
-    results = get_findings(cspm_client, GCP_CONFIG_TIMEOUT, query, sort, match_type)
-    assert len(results) > 0, f"The resource type '{match_type}' is missing"
+        results = get_findings(cspm_client, GCP_CONFIG_TIMEOUT, query, sort, match_type)
+        assert len(results) > 0, f"The resource type '{match_type}' is missing for agent {agent}"
 
 
 @pytest.mark.sanity
+@pytest.mark.agentless
 @pytest.mark.parametrize("match_type", tests_data["cis_azure"])
-def test_cspm_azure_findings(cspm_client, match_type):
+def test_cspm_azure_findings(
+    cspm_client,
+    match_type,
+    agents_actual_components: AgentComponentMapping,
+    agents_expected_components: AgentExpectedMapping,
+):
     """
     Test case to check for Azure findings in CSPM.
 
@@ -240,17 +275,20 @@ def test_cspm_azure_findings(cspm_client, match_type):
     Raises:
         AssertionError: If the resource type is missing.
     """
-    query_list = build_query_list(benchmark_id="cis_azure", version=AGENT_VERSION)
-    query, sort = cspm_client.build_es_must_match_query(
-        must_query_list=query_list,
-        time_range="now-24h",
-    )
+    azure_agents = wait_components_list(agents_actual_components, agents_expected_components, CIS_AZURE_COMPONENT)
+    for agent in azure_agents:
+        query_list = build_query_list(
+            benchmark_id="cis_azure",
+            match_type=match_type,
+            agent=agent,
+        )
+        query, sort = cspm_client.build_es_must_match_query(must_query_list=query_list, time_range="now-24h")
 
-    results = get_findings(cspm_client, CONFIG_TIMEOUT, query, sort, match_type)
-    assert len(results) > 0, f"The resource type '{match_type}' is missing"
+        results = get_findings(cspm_client, CONFIG_TIMEOUT, query, sort, match_type)
+        assert len(results) > 0, f"The resource type '{match_type}' is missing for agent {agent}"
 
 
-def wait_components_list(actual: AgentComponentMapping, expected: AgentExpectedMapping, component: str):
+def wait_components_list(actual: AgentComponentMapping, expected: AgentExpectedMapping, component: str) -> list[str]:
     """
     Wait for the list of agents running the specified component.
 
@@ -261,13 +299,18 @@ def wait_components_list(actual: AgentComponentMapping, expected: AgentExpectedM
         list: The list of agents running the specified component.
     """
 
+    # Skip waiting for agents if fleet is not available.
+    if not elasticsearch.kibana_url:
+        return [""]
+
+    try_loading_map(actual)
     start_time = time.time()
     while time.time() - start_time < COMPONENTS_TIMEOUT:
         if len(actual.component_map[component]) == expected.expected_map[component]:
             break
 
         time.sleep(COMPONENTS_BACKOFF)
-        actual.load_map()
+        try_loading_map(actual)
 
     assert expected.expected_map[component] == len(
         actual.component_map[component],
@@ -275,3 +318,14 @@ def wait_components_list(actual: AgentComponentMapping, expected: AgentExpectedM
  {component}, but got {len(actual.component_map[component])}"
 
     return actual.component_map[component]
+
+
+def try_loading_map(actual: AgentComponentMapping) -> None:
+    """
+    A convenient wrapper to catch errors when the actual map that is supposed to be loaded
+    is not ready yet.
+    """
+    try:
+        actual.load_map()
+    except (AttributeError, KeyError, IndexError) as ex:
+        logger.warning(ex)

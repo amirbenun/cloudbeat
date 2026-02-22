@@ -32,12 +32,6 @@ import (
 	"github.com/elastic/beats/v7/dev-tools/mage"
 	devtools "github.com/elastic/beats/v7/dev-tools/mage"
 	"github.com/elastic/beats/v7/dev-tools/mage/gotool"
-	"github.com/elastic/e2e-testing/pkg/downloads"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/magefile/mage/mg"
-	"github.com/magefile/mage/sh"
-
 	// mage:import
 	_ "github.com/elastic/beats/v7/dev-tools/mage/target/integtest/notests"
 	// mage:import
@@ -46,13 +40,17 @@ import (
 	_ "github.com/elastic/beats/v7/dev-tools/mage/target/test"
 	// mage:import
 	_ "github.com/elastic/beats/v7/dev-tools/mage/target/unittest"
+	"github.com/elastic/e2e-testing/pkg/downloads"
+	"github.com/magefile/mage/mg"
+	"github.com/magefile/mage/sh"
 
 	cloudbeat "github.com/elastic/cloudbeat/scripts/mage"
 )
 
 const (
-	snapshotEnv   = "SNAPSHOT"
-	agentDropPath = "AGENT_DROP_PATH"
+	snapshotEnv         = "SNAPSHOT"
+	agentDropPath       = "AGENT_DROP_PATH"
+	cloudbeatModulePath = "github.com/elastic/cloudbeat"
 )
 
 func init() {
@@ -79,7 +77,14 @@ func Check() error {
 // Build builds the Beat binary.
 func Build() error {
 	mg.Deps(BuildOpaBundle)
-	return devtools.Build(devtools.DefaultBuildArgs())
+
+	args := devtools.DefaultBuildArgs()
+	args.CGO = false
+	args.ExtraFlags = append(args.ExtraFlags, "-tags=grpcnotrace,release")
+	if versionQualifier, versionQualified := os.LookupEnv("VERSION_QUALIFIER"); versionQualified {
+		args.Vars[cloudbeatModulePath+"/version.qualifier"] = versionQualifier
+	}
+	return devtools.Build(args)
 }
 
 // Clean cleans all generated files and build artifacts.
@@ -92,22 +97,18 @@ func Clean() error {
 // GolangCrossBuild build the Beat binary inside of the golang-builder.
 // Do not use directly, use crossBuild instead.
 func GolangCrossBuild() error {
-	return devtools.GolangCrossBuild(devtools.DefaultGolangCrossBuildArgs())
-}
-
-// BuildGoDaemon builds the go-daemon binary (use crossBuildGoDaemon).
-func BuildGoDaemon() error {
-	return devtools.BuildGoDaemon()
+	args := devtools.DefaultGolangCrossBuildArgs()
+	args.CGO = false
+	args.ExtraFlags = append(args.ExtraFlags, "-tags=grpcnotrace,release")
+	if versionQualifier, versionQualified := os.LookupEnv("VERSION_QUALIFIER"); versionQualified {
+		args.Vars[cloudbeatModulePath+"/version.qualifier"] = versionQualifier
+	}
+	return devtools.GolangCrossBuild(args)
 }
 
 // CrossBuild cross-builds the beat for all target platforms.
 func CrossBuild() error {
 	return devtools.CrossBuild()
-}
-
-// CrossBuildGoDaemon cross-builds the go-daemon binary using Docker.
-func CrossBuildGoDaemon() error {
-	return devtools.CrossBuildGoDaemon()
 }
 
 // Run UnitTests
@@ -120,7 +121,6 @@ func GoTestUnit(ctx context.Context) error {
 // Use PLATFORMS to control the target platforms.
 // Use VERSION_QUALIFIER to control the version qualifier.
 func Package() {
-
 	start := time.Now()
 	defer func() { fmt.Println("package ran for", time.Since(start)) }()
 
@@ -132,7 +132,7 @@ func Package() {
 	}
 
 	mg.Deps(Update)
-	mg.Deps(CrossBuild, CrossBuildGoDaemon)
+	mg.Deps(CrossBuild)
 	mg.SerialDeps(devtools.Package)
 }
 
@@ -237,7 +237,7 @@ func PackageAgent() {
 		panic(err)
 	}
 
-	if err := os.MkdirAll(dropPath, 0755); err != nil {
+	if err := os.MkdirAll(dropPath, 0o755); err != nil {
 		panic(err)
 	}
 
@@ -338,12 +338,6 @@ func PythonEnv() error {
 
 func getMajorMinorVersion(version string) string {
 	return strings.Join(strings.Split(version, ".")[:2], ".")
-}
-
-func checkoutBranch(wt *git.Worktree, branch string) error {
-	return wt.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-	})
 }
 
 func BuildOpaBundle() error {

@@ -2,12 +2,13 @@
 Kubernetes CIS rules verification.
 This module verifies correctness of retrieved findings by manipulating audit and remediation actions
 """
+
 from datetime import datetime, timedelta
+
 import pytest
 from commonlib.utils import get_ES_evaluation
-
-from product.tests.data.process import eks_process_test_cases as eks_proc_tc
-from product.tests.parameters import register_params, Parameters
+from product.tests.data.eks import eks_process_test_cases as eks_proc_tc
+from product.tests.parameters import Parameters, register_params
 
 
 @pytest.mark.eks_process_rules

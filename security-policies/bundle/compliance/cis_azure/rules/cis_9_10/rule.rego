@@ -4,21 +4,23 @@ import data.compliance.lib.common
 import data.compliance.policy.azure.data_adapter
 import future.keywords.if
 
-finding = result if {
+finding := result if {
 	# filter
 	data_adapter.is_website_asset
 
 	# set result
 	result := common.generate_result_without_expected(
-		common.calculate_result(is_ftps_disabled),
+		common.calculate_result(is_ftp_state_disabled_or_ftps),
 		data_adapter.resource,
 	)
 }
 
-is_ftps_disabled if {
-	is_ftps_enabled != true
-} else = false
+default is_ftp_state_disabled_or_ftps := false
 
-is_ftps_enabled if {
-	data_adapter.site_config.ftpsState == "AllAllowed"
-} else = false
+is_ftp_state_disabled_or_ftps if {
+	data_adapter.resource.extension.siteConfig.properties.FtpsState == "Disabled"
+}
+
+is_ftp_state_disabled_or_ftps if {
+	data_adapter.resource.extension.siteConfig.properties.FtpsState == "FtpsOnly"
+}
